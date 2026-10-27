@@ -1,0 +1,416 @@
+# u'nSP p-code cases.  Expectations are worked out by hand from the ISA notes:
+#   vsmile-hardware-docs (cpu.md: SR = DS[15:10] N[9] Z[8] S[7] C[6] CS[5:0], flags, push/pop, call/retf),
+#   the veesem emulator's ALU rules (ISC; hardware-tested): add C = carry out, S = sign of the infinite
+#   precision signed result; sub = a + ~b + 1 (C = no borrow); sbc = a + ~b + C; N = bit 15; Z = result == 0;
+#   neg/logic/load/test set only N and Z.
+# Registers start at 0.  Code is at word address 0x800.  SR value = ds<<10 | N<<9 | Z<<8 | S<<7 | C<<6.
+# The instruction under test is assembled by naken_asm (asm lines) or given as hex (hex lines); the
+# MAME disassembly of every case is added as a '# mame:' comment by test/build_cases.py.
+
+# a flag that depends on the carry-in: subtract with carry after a compare
+case cmp_then_sbc_chain
+asm cmp r1, r2
+asm sbc r3, r4
+set r1 0x0000
+set r2 0x0001
+set r3 0x0010
+set r4 0x0001
+expect r3 0x000E
+expect sr 0x0040
+end
+
+case add_plain
+asm add r1, r2
+set r1 0x1234
+set r2 0x1111
+expect r1 0x2345
+expect sr 0x0000
+end
+
+case add_carry_zero
+asm add r1, r2
+set r1 0xFFFF
+set r2 0x0001
+expect r1 0x0000
+expect sr 0x0140
+end
+
+case add_signed_overflow
+asm add r1, r2
+set r1 0x7FFF
+set r2 0x0001
+expect r1 0x8000
+expect sr 0x0200
+end
+
+case add_negative_result
+asm add r1, r2
+set r1 0x8000
+set r2 0x8000
+expect r1 0x0000
+expect sr 0x01C0
+end
+
+case adc_uses_carry
+asm adc r1, r2
+set r1 0xFFFF
+set r2 0x0000
+set sr 0x0040
+expect r1 0x0000
+expect sr 0x0140
+end
+
+case sub_borrow
+asm sub r1, r2
+set r1 0x0000
+set r2 0x0001
+expect r1 0xFFFF
+expect sr 0x0280
+end
+
+case sub_equal
+asm sub r1, r2
+set r1 0x0005
+set r2 0x0005
+expect r1 0x0000
+expect sr 0x0140
+end
+
+case sbc_without_carry
+asm sbc r1, r2
+set r1 0x0005
+set r2 0x0003
+expect r1 0x0001
+expect sr 0x0040
+end
+
+case sbc_with_carry
+asm sbc r1, r2
+set r1 0x0005
+set r2 0x0003
+set sr 0x0040
+expect r1 0x0002
+expect sr 0x0040
+end
+
+case cmp_signed_less
+asm cmp r1, r2
+set r1 0xFFFF
+set r2 0x0001
+expect r1 0xFFFF
+expect sr 0x02C0
+end
+
+case neg_register
+asm neg r2, r1
+set r1 0x0005
+expect r2 0xFFFB
+expect sr 0x0200
+end
+
+case xor_and_or
+asm xor r1, r2
+asm and r3, r2
+asm or r4, r2
+set r1 0xFF00
+set r2 0x0FF0
+set r3 0xFFFF
+set r4 0x000F
+expect r1 0xF0F0
+expect r3 0x0FF0
+expect r4 0x0FFF
+expect sr 0x0000
+end
+
+case test_sets_zero
+asm test r1, r2
+set r1 0x00F0
+set r2 0xFF00
+expect r1 0x00F0
+expect sr 0x0100
+end
+
+case load_imm6_and_imm16
+asm ld r3, #32
+asm ld r4, #3223
+expect r3 0x0020
+expect r4 0x0C97
+end
+
+case load_store_bp
+asm ld r1, [bp+3]
+asm st r1, [bp+4]
+set bp 0x0100
+set ram:103 0xBEEF
+expect r1 0xBEEF
+expect ram:104 0xBEEF
+expect sr 0x0200
+end
+
+case load_direct_and_abs
+asm ld r1, [20]
+asm ld r2, [3223]
+asm st r2, [2343]
+set ram:14 0x1111
+set ram:c97 0x2222
+expect r1 0x1111
+expect r2 0x2222
+expect ram:927 0x2222
+end
+
+case indirect_modes
+asm ld r1, [r2++]
+asm ld r3, [++r2]
+asm ld r4, [r2--]
+set r2 0x0300
+set ram:300 0x1111
+set ram:301 0x2222
+set ram:302 0x3333
+expect r1 0x1111
+expect r3 0x3333
+expect r4 0x3333
+expect r2 0x0301
+end
+
+case ds_indirect_crosses_segment
+asm ld r1, d:[r2++]
+set r2 0xFFFF
+set sr 0x0400
+set ram:1ffff 0x7777
+expect r1 0x7777
+expect r2 0x0000
+expect sr 0x0800
+end
+
+case shift_lsl4
+asm ld r1, r2 lsl 4
+set r2 0x1234
+expect r1 0x2340
+expect sb 0x01
+end
+
+case shift_lsr4
+asm ld r1, r2 lsr 4
+set r2 0x1234
+expect r1 0x0123
+expect sb 0x04
+end
+
+case shift_asr1_negative
+asm ld r1, r2 asr 1
+set r2 0x8000
+expect r1 0xC000
+expect sr 0x0200
+end
+
+case shift_rol1_and_ror1
+asm ld r1, r2 rol 1
+set r2 0x8001
+expect r1 0x0002
+expect sb 0x01
+end
+
+case shift_ror1
+asm ld r1, r2 ror 1
+set r2 0x0001
+expect r1 0x0000
+expect sb 0x08
+end
+
+case jump_forward_taken
+asm cmp r1, r1
+asm je lskip
+asm ld r2, #1
+asm lskip:
+asm ld r3, #2
+expect r2 0x0000
+expect r3 0x0002
+end
+
+case jump_not_taken_and_loop
+asm ld r1, #3
+asm lloop:
+asm add r2, #5
+asm sub r1, #1
+asm jne lloop
+expect r1 0x0000
+expect r2 0x000F
+end
+
+case signed_conditions
+asm cmp r1, r2
+asm jl lless
+asm ld r3, #1
+asm jmp ldone
+asm lless:
+asm ld r3, #2
+asm ldone:
+set r1 0xFFFF
+set r2 0x0001
+expect r3 0x0002
+end
+
+case unsigned_conditions
+asm cmp r1, r2
+asm jb lbelow
+asm ld r3, #1
+asm jmp ldone
+asm lbelow:
+asm ld r3, #2
+asm ldone:
+set r1 0xFFFF
+set r2 0x0001
+expect r3 0x0001
+end
+
+case call_and_retf
+asm call lsub
+asm ld r2, #7
+asm goto ldone
+asm lsub:
+asm ld r1, #9
+asm retf
+asm ldone:
+set sp 0x0100
+expect r1 0x0009
+expect r2 0x0007
+expect sp 0x0100
+expect ram:100 0x0802
+end
+
+case push_pop_range
+asm push r1-r3, [sp]
+asm ld r1, #0
+asm ld r2, #0
+asm ld r3, #0
+asm pop r1-r3, [sp]
+set sp 0x0100
+set r1 0x000A
+set r2 0x000B
+set r3 0x000C
+expect r1 0x000A
+expect r2 0x000B
+expect r3 0x000C
+expect sp 0x0100
+expect ram:100 0x000C
+expect ram:ff 0x000B
+expect ram:fe 0x000A
+end
+
+case mul_signed
+asm mul.ss r1, r2
+set r1 0xFFFF
+set r2 0x0003
+expect r3 0xFFFD
+expect r4 0xFFFF
+end
+
+case mul_unsigned_signed
+asm mul.us r1, r2
+set r1 0xFFFF
+set r2 0xFFFF
+expect r3 0x0001
+expect r4 0xFFFF
+end
+
+case mul_unsigned_unsigned
+hex 0ae2
+set r1 0xFFFF
+set r2 0x0002
+expect r3 0xFFFE
+expect r4 0x0001
+end
+
+case mac_two_terms
+hex 92f3
+set r1 0x0400
+set r2 0x0500
+set ram:400 0x0003
+set ram:401 0xFFFF
+set ram:500 0x0004
+set ram:501 0x0005
+expect r3 0x0007
+expect r4 0x0000
+expect r1 0x0402
+expect r2 0x0502
+expect ram:401 0xFFFF
+end
+
+case mac_fir_mov_shifts_samples
+hex 92f3
+set fir_mov 1
+set r1 0x0400
+set r2 0x0500
+set ram:400 0x0003
+set ram:401 0xFFFF
+set ram:500 0x0004
+set ram:501 0x0005
+expect r3 0x0007
+expect ram:401 0x0003
+end
+
+case bit_set_clear_invert_test
+hex 53e2
+hex 63e2
+hex 73e2
+hex 43e2
+set r1 0x0000
+expect r1 0x0008
+expect sr 0x0000
+end
+
+case tstb_zero_when_clear
+hex 43e2
+set r1 0x0000
+expect sr 0x0100
+end
+
+case ds_immediate
+hex 1ffe
+expect sr 0x7C00
+end
+
+case int_irq_sets_enable
+hex 41f1
+expect irq 0x01
+expect fiq 0x00
+end
+
+case read_sr_has_code_segment
+asm ld r1, sr
+set sr 0x0640
+expect r1 0x0640
+end
+
+case read_pc_is_next_address
+asm ld r1, pc
+expect r1 0x0801
+end
+
+case write_pc_jumps_in_segment
+asm ld pc, r1
+set r1 0x0810
+until 810
+expect PC 0x0810
+end
+
+case goto_far
+asm goto 0x23456
+until 23456
+expect PC 0x23456
+end
+
+case flags_not_set_when_pc_destination
+asm add pc, #2
+set sr 0x0000
+until 803
+expect PC 0x0803
+expect sr 0x0000
+end
+
+case wrong_expectation_is_detected broken
+asm add r1, r2
+set r1 0x0001
+set r2 0x0001
+expect r1 0x0003
+end

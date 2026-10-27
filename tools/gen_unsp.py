@@ -90,6 +90,10 @@ define token instr(16)
     sk=(4, 6)
     bit3=(3, 3)
     iclass=(3, 5)
+    x8=(8, 8)
+    x76=(6, 7)
+    x54=(4, 5)
+    x74=(4, 7)
 ;
 
 define token instr2(16)
@@ -627,6 +631,186 @@ def gen_misc():
     emit(':"nop" is op0=0xf & op1=5 & Nhi=1 & Bv=5 { }')
 
 
+
+# ------------------------------------------------------------------------------------------------
+# u'nSP 2.0 extended group: the word 0xff80 prefixes an ALU instruction whose register fields are
+# extended to four bits (r8..r15) and whose addressing mode is selected by the low byte ("group").
+# ------------------------------------------------------------------------------------------------
+REGN16 = REGN + ["r%d" % i for i in range(8, 16)]
+
+
+def gen_ext():
+    sec("u'nSP 2.0 extended group (prefix 0xff80)")
+    emit("# Registers of the extended group: XRd = {bit 8, A}, XRs = {bit 3, B}, XRa = r8+A, XRp = r8+B")
+    for tbl, hi, lo, shown in (("XRdV", "x8", "Av", "A"), ("XRsV", "bit3", "Bv", "B")):
+        for k in range(16):
+            cond = f"{hi}={k >> 3} & {lo}={k & 7}"
+            reg = REGN16[k]
+            if k == 6:
+                body = "local t:2; srnow(t); export t;"
+            elif k == 7:
+                body = "local t:2; pcnext(t); export t;"
+            else:
+                body = f"export {reg};"
+            emit(f'{tbl}: "{reg}" is {cond} {{ {body} }}')
+    for k in range(16):
+        reg = REGN16[k]
+        body = "local t:2; pcnext(t); export t;" if k == 7 else f"export {reg};"
+        emit(f'XPtr: "{reg}" is bit3={k >> 3} & Bv={k & 7} {{ {body} }}')
+    for k in range(16):
+        if k == 7:
+            continue
+        emit(f'XRdW: "{REGN16[k]}" is x8={k >> 3} & Av={k & 7} {{ export {REGN16[k]}; }}')
+    for k in range(16):
+        if k != 7:
+            emit(f'XRsW: "{REGN16[k]}" is bit3={k >> 3} & Bv={k & 7} {{ export {REGN16[k]}; }}')
+    for k in range(8):
+        emit(f'XRaV: "r{8 + k}" is Av={k} {{ export r{8 + k}; }}')
+        emit(f'XRaW: "r{8 + k}" is Av={k} {{ export r{8 + k}; }}')
+        emit(f'XRpW: "r{8 + k}" is Bv={k} {{ export r{8 + k}; }}')
+    # display-only copies of the destination (for 'rd = rd op rs' style text)
+    PRE = "(op0=0xf & Av=7 & op1=6 & N=0 & Bv=0) ; "
+    for op0, key in OPS:
+        # group 0: rd op= rs      (cmp/test: no destination); op0=0xd behaves as a register move
+        if key == "store":
+            body = " ".join(["build XRdV;", "local res:2 = XRdV;", goto_res()])
+            emit(f':"pc" "=" XRdV is {PRE}(op0={op0:#x} & x76=0 & x54=0 & bit3=0 & Bv=7 & XRdV) {{ {body} }}')
+            body = " ".join(["build XRdV;", "XRsW = XRdV;"])
+            emit(f':^XRsW "=" XRdV is {PRE}(op0={op0:#x} & x76=0 & x54=0 & XRsW & XRdV) {{ {body} }}')
+        if key != "store":
+            rd_pre = ["build XRsV;", "build XRdV;", "local va:2 = XRdV;", "local vb:2 = XRsV;"]
+            if key in WRITES:
+                body = " ".join(rd_pre + alu_body(key, "va", "vb") + ["XRdW = res;"])
+                emit(f':^XRdW "{OPASG[key]}" XRsV{carry_sfx(key)} is {PRE}(op0={op0:#x} & x76=0 & x54=0 & XRdW & XRdV & XRsV) {{ {body} }}')
+                body = " ".join(rd_pre + alu_nf(key, "va", "vb") + [goto_res()])
+                emit(f':^XRdV "{OPASG[key]}" XRsV{carry_sfx(key)} is {PRE}(op0={op0:#x} & x76=0 & x54=0 & x8=0 & Av=7 & XRdV & XRsV) {{ {body} }}')
+            else:
+                body = " ".join(rd_pre + alu_body(key, "va", "vb"))
+                emit(f':{key} XRdV, XRsV is {PRE}(op0={op0:#x} & x76=0 & x54=0 & XRdV & XRsV) {{ {body} }}')
+        # groups 1..3 (imm16, [imm16], [imm16] = ...)
+        for g, x54 in ((1, 0), (2, 2), (3, 3)):
+            if g in (1, 2) and key == "store" and g == 1:
+                continue
+            if g == 1:
+                od = "imm16"
+            elif g == 2:
+                od = '"[" ^ imm16 ^ "]"'
+            if g in (1, 2):
+                pre = ["build XRsV;", "build XRdV;", "local va:2 = XRsV;"]
+                pre += ["local vb:2 = imm16;"] if g == 1 else ["local ma:3 = imm16;", "local vb:2 = *[ram]:2 ma;"]
+                if key == "store":
+                    if g == 2:
+                        # [imm16] = rd
+                        body = " ".join(["build XRsV;", "local ma:3 = imm16;", "*[ram]:2 ma = XRsV;"])
+                        emit(f':"[" ^ imm16 ^ "]" "=" XRsV is {PRE}(op0={op0:#x} & x76=1 & x54={x54} & XRsV) ; imm16 {{ {body} }}')
+                    continue
+                if key in WRITES:
+                    if key == "load":
+                        disp = f'"=" {od}'
+                        bl = ["local res:2 = vb;", "setNZ(res);"]
+                    elif key == "neg":
+                        disp = f'"=" "-" {od}'
+                        bl = alu_body(key, "va", "vb")
+                    else:
+                        disp = f'"=" XRsV "{OPSYM[key]}" {od}{carry_sfx(key)}'
+                        bl = alu_body(key, "va", "vb")
+                    body = " ".join(pre + bl + ["XRdW = res;"])
+                    emit(f':^XRdW {disp} is {PRE}(op0={op0:#x} & x76=1 & x54={x54} & XRdW & XRdV & XRsV) ; imm16 {{ {body} }}')
+                    bl = (["local res:2 = vb;"] if key == "load" else alu_nf(key, "va", "vb"))
+                    body = " ".join(pre + bl + [goto_res()])
+                    emit(f':^XRdV {disp} is {PRE}(op0={op0:#x} & x76=1 & x54={x54} & x8=0 & Av=7 & XRdV & XRsV) ; imm16 {{ {body} }}')
+                else:
+                    body = " ".join([l for l in pre if l != "build XRdV;"] + alu_body(key, "va", "vb"))
+                    emit(f':{key} XRsV, {od} is {PRE}(op0={op0:#x} & x76=1 & x54={x54} & XRsV) ; imm16 {{ {body} }}')
+            else:
+                pre = ["build XRsV;", "build XRdV;", "local va:2 = XRsV;", "local vb:2 = XRdV;", "local ma:3 = imm16;"]
+                if key in ("cmp", "test"):
+                    body = " ".join(pre + alu_body(key, "va", "vb"))
+                    emit(f':{key} XRsV, XRdV is {PRE}(op0={op0:#x} & x76=1 & x54=3 & XRdV & XRsV) ; imm16 {{ {body} }}')
+                    continue
+                if key == "store":
+                    body = " ".join(["build XRsV;", "local ma:3 = imm16;", "*[ram]:2 ma = XRsV;"])
+                    emit(f':"[" ^ imm16 ^ "]" "=" XRsV is {PRE}(op0={op0:#x} & x76=1 & x54=3 & XRsV) ; imm16 {{ {body} }}')
+                    continue
+                if key == "load":
+                    bl = ["local res:2 = vb;", "setNZ(res);"]
+                    disp = '"[" ^ imm16 ^ "]" "=" XRdV'
+                elif key == "neg":
+                    bl = ["local res:2 = -vb;", "setNZ(res);"]
+                    disp = '"[" ^ imm16 ^ "]" "=" "-" XRdV'
+                else:
+                    bl = alu_body(key, "va", "vb")
+                    disp = f'"[" ^ imm16 ^ "]" "=" XRsV "{OPSYM[key]}" XRdV{carry_sfx(key)}'
+                body = " ".join(pre + bl + ["*[ram]:2 ma = res;"])
+                emit(f':{disp} is {PRE}(op0={op0:#x} & x76=1 & x54=3 & XRdV & XRsV) ; imm16 {{ {body} }}')
+        # groups 4..8: rd = r8+A op operand
+        forms = []
+        for mode, (nm, ptrfmt) in enumerate((("", '"[" ^ XRpW ^ "]"'), ("--", '"[" ^ XRpW ^ "--]"'),
+                                             ("++", '"[" ^ XRpW ^ "++]"'), ("pre", '"[++" ^ XRpW ^ "]"'))):
+            forms.append((f"g4m{mode}", f"x8=0 & x76=2 & Nhi=0 & Nlo={mode} & XRpW", ptrfmt, mode, False))
+            forms.append((f"g5m{mode}", f"x8=0 & x76=2 & Nhi=1 & Nlo={mode} & XRpW",
+                          ptrfmt.replace('"[', '"ds:[', 1), mode, True))
+        for fname, pat, disp, mode, ds in forms:
+            pp = "XRpW"
+            lines = ["build XRpW;"]
+            if mode == 0:
+                lines.append(f"local ad:3 = {'(zext(ds) << 16) | zext(XRpW)' if ds else 'zext(XRpW)'};")
+            elif mode == 1:
+                lines.append(f"local ad:3 = {'(zext(ds) << 16) | zext(XRpW)' if ds else 'zext(XRpW)'}; XRpW = XRpW - 1;")
+                if ds:
+                    lines.append("local wr:1 = XRpW == 0xffff; ds = ds - wr;")
+            elif mode == 2:
+                lines.append(f"local ad:3 = {'(zext(ds) << 16) | zext(XRpW)' if ds else 'zext(XRpW)'}; XRpW = XRpW + 1;")
+                if ds:
+                    lines.append("local wr:1 = XRpW == 0; ds = ds + wr;")
+            else:
+                lines.append("XRpW = XRpW + 1;")
+                if ds:
+                    lines.append("local wr:1 = XRpW == 0; ds = ds + wr;")
+                lines.append(f"local ad:3 = {'(zext(ds) << 16) | zext(XRpW)' if ds else 'zext(XRpW)'};")
+            ext_mem(op0, key, pat, disp, lines, "*[ram]:2 ad")
+        ext_mem(op0, key, "x8=1 & x76=2 & imm6", 'imm6', ["local iv:2 = imm6;"], "iv", imm=True)
+        ext_mem(op0, key, "x8=0 & x76=3 & imm6", '"[bp+" ^ imm6 ^ "]"',
+                ["local ad:3 = zext(bp + imm6);"], "*[ram]:2 ad")
+        ext_mem(op0, key, "x8=1 & x76=3 & imm6", '"[" ^ imm6 ^ "]"', ["local ad:3 = imm6;"], "*[ram]:2 ad")
+    # push / pop of r8..r15 (register numbers wrap inside the bank)
+    for n in range(8):
+        for a in range(8):
+            popregs = [8 + ((a + 1 + i) & 7) for i in range(n)]
+            body = ["build XPtr;", "local ad:3;"]
+            for r in popregs:
+                body += ["XPtr = XPtr + 1;", "ad = zext(XPtr);", f"r{r} = *[ram]:2 ad;"]
+            first = 8 + ((a + 1) & 7)
+            last = 8 + ((a + n) & 7) if n else 8 + a
+            emit(f':pop "r{first}" "," "r{last}" "from" "[" ^ XPtr ^ "]" is {PRE}(op0={n} & Av={a} & x8=0 & x76=0 & x54=2 & XPtr) {{ {" ".join(body)} }}')
+            pushregs = [8 + ((a - i) & 7) for i in range(n)]
+            body = ["build XPtr;", "local v:2;", "local ad:3;"]
+            for r in pushregs:
+                body += [f"v = r{r};", "ad = zext(XPtr);", "*[ram]:2 ad = v;", "XPtr = XPtr - 1;"]
+            second = 8 + ((a - n + 1) & 7) if n else 8 + ((a + 1) & 7)
+            emit(f':push "r{8 + a}" "," "r{second}" "to" "[" ^ XPtr ^ "]" is {PRE}(op0={8 + n} & Av={a} & x8=0 & x76=0 & x54=2 & XPtr) {{ {" ".join(body)} }}')
+
+
+def ext_mem(op0, key, pat, disp, lines, mem, imm=False):
+    """Extended group 4..8: r(8+A) op= <operand>"""
+    if key == "store":
+        if imm:
+            return
+        body = " ".join(lines + ["build XRaV;", f"{mem} = XRaV;"])
+        emit(f':{disp} "=" XRaV is {PRE_X}(op0={op0:#x} & {pat} & XRaV) {{ {body} }}')
+        return
+    pre = lines + ["build XRaV;", "local va:2 = XRaV;", f"local vb:2 = {mem};"]
+    if key in WRITES:
+        body = " ".join(pre + alu_body(key, "va", "vb") + ["XRaW = res;"])
+        emit(f':^XRaW "{OPASG[key]}" {disp}{carry_sfx(key)} is {PRE_X}(op0={op0:#x} & {pat} & XRaW & XRaV) {{ {body} }}')
+    else:
+        body = " ".join(pre + alu_body(key, "va", "vb"))
+        emit(f':{key} XRaV, {disp} is {PRE_X}(op0={op0:#x} & {pat} & XRaV) {{ {body} }}')
+
+
+PRE_X = "(op0=0xf & Av=7 & op1=6 & N=0 & Bv=0) ; "
+
+
 def main():
     outp = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "..", "data", "languages", "unsp.slaspec")
@@ -641,6 +825,7 @@ def main():
     gen_bitops()
     gen_regshift()
     gen_misc()
+    gen_ext()
     with open(outp, "w") as f:
         f.write("\n".join(out) + "\n")
 
