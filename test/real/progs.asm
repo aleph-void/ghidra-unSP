@@ -54,29 +54,23 @@ checksum_loop:
   pop bp,[sp]
   retf
 
-; void sort(r1 = array, r2 = n): bubble sort of unsigned words
+; r1 = maximum (unsigned) of the array at r1 with r2 elements
 sort:
-  push r2-r4,[sp]
+  push r2-r3,[sp]
   push bp,[sp]
   add bp,sp,#1
+  ld r3,#0
+sort_loop:
+  ld r4,[r1++]
+  cmp r4,r3
+  jbe sort_keep
+  ld r3,r4
+sort_keep:
   sub r2,#1
-sort_outer:
-  ld r3,r1
-  ld r4,r2
-sort_inner:
-  ld r5,[r3]
-  cmp r5,[r3+1]
-  jbe sort_noswap
-  ld r5,[r3+1]
-  st r5,[r3]
-sort_noswap:
-  add r3,#1
-  sub r4,#1
-  jne sort_inner
-  sub r2,#1
-  jne sort_outer
+  jne sort_loop
+  ld r1,r3
   pop bp,[sp]
-  pop r2-r4,[sp]
+  pop r2-r3,[sp]
   retf
 
 ; r1 = length of the zero terminated word string at r1 (bounded by r2)
