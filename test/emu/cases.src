@@ -414,3 +414,914 @@ set r1 0x0001
 set r2 0x0001
 expect r1 0x0003
 end
+
+# ---- every conditional jump, with flag states chosen so that taken / not taken both occur ----
+case cond_jb_C0S0Z0N0
+asm jb ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0002
+end
+
+case cond_jb_C1S0Z1N0
+asm jb ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0001
+end
+
+case cond_jb_C0S1Z0N1
+asm jb ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0002
+end
+
+case cond_jb_C1S1Z0N0
+asm jb ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0001
+end
+
+case cond_jb_C0S0Z1N1
+asm jb ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0002
+end
+
+case cond_jae_C0S0Z0N0
+asm jae ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0001
+end
+
+case cond_jae_C1S0Z1N0
+asm jae ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0002
+end
+
+case cond_jae_C0S1Z0N1
+asm jae ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0001
+end
+
+case cond_jae_C1S1Z0N0
+asm jae ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0002
+end
+
+case cond_jae_C0S0Z1N1
+asm jae ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0001
+end
+
+case cond_jge_C0S0Z0N0
+asm jge ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0002
+end
+
+case cond_jge_C1S0Z1N0
+asm jge ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0002
+end
+
+case cond_jge_C0S1Z0N1
+asm jge ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0001
+end
+
+case cond_jge_C1S1Z0N0
+asm jge ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0001
+end
+
+case cond_jge_C0S0Z1N1
+asm jge ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0002
+end
+
+case cond_jl_C0S0Z0N0
+asm jl ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0001
+end
+
+case cond_jl_C1S0Z1N0
+asm jl ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0001
+end
+
+case cond_jl_C0S1Z0N1
+asm jl ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0002
+end
+
+case cond_jl_C1S1Z0N0
+asm jl ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0002
+end
+
+case cond_jl_C0S0Z1N1
+asm jl ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0001
+end
+
+case cond_jne_C0S0Z0N0
+asm jne ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0002
+end
+
+case cond_jne_C1S0Z1N0
+asm jne ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0001
+end
+
+case cond_jne_C0S1Z0N1
+asm jne ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0002
+end
+
+case cond_jne_C1S1Z0N0
+asm jne ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0002
+end
+
+case cond_jne_C0S0Z1N1
+asm jne ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0001
+end
+
+case cond_je_C0S0Z0N0
+asm je ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0001
+end
+
+case cond_je_C1S0Z1N0
+asm je ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0002
+end
+
+case cond_je_C0S1Z0N1
+asm je ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0001
+end
+
+case cond_je_C1S1Z0N0
+asm je ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0001
+end
+
+case cond_je_C0S0Z1N1
+asm je ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0002
+end
+
+case cond_jpl_C0S0Z0N0
+asm jpl ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0002
+end
+
+case cond_jpl_C1S0Z1N0
+asm jpl ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0002
+end
+
+case cond_jpl_C0S1Z0N1
+asm jpl ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0001
+end
+
+case cond_jpl_C1S1Z0N0
+asm jpl ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0002
+end
+
+case cond_jpl_C0S0Z1N1
+asm jpl ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0001
+end
+
+case cond_jmi_C0S0Z0N0
+asm jmi ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0001
+end
+
+case cond_jmi_C1S0Z1N0
+asm jmi ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0001
+end
+
+case cond_jmi_C0S1Z0N1
+asm jmi ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0002
+end
+
+case cond_jmi_C1S1Z0N0
+asm jmi ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0001
+end
+
+case cond_jmi_C0S0Z1N1
+asm jmi ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0002
+end
+
+case cond_jbe_C0S0Z0N0
+asm jbe ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0002
+end
+
+case cond_jbe_C1S0Z1N0
+asm jbe ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0002
+end
+
+case cond_jbe_C0S1Z0N1
+asm jbe ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0002
+end
+
+case cond_jbe_C1S1Z0N0
+asm jbe ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0001
+end
+
+case cond_jbe_C0S0Z1N1
+asm jbe ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0002
+end
+
+case cond_ja_C0S0Z0N0
+asm ja ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0001
+end
+
+case cond_ja_C1S0Z1N0
+asm ja ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0001
+end
+
+case cond_ja_C0S1Z0N1
+asm ja ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0001
+end
+
+case cond_ja_C1S1Z0N0
+asm ja ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0002
+end
+
+case cond_ja_C0S0Z1N1
+asm ja ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0001
+end
+
+case cond_jle_C0S0Z0N0
+asm jle ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0001
+end
+
+case cond_jle_C1S0Z1N0
+asm jle ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0002
+end
+
+case cond_jle_C0S1Z0N1
+asm jle ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0002
+end
+
+case cond_jle_C1S1Z0N0
+asm jle ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0002
+end
+
+case cond_jle_C0S0Z1N1
+asm jle ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0002
+end
+
+case cond_jg_C0S0Z0N0
+asm jg ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0002
+end
+
+case cond_jg_C1S0Z1N0
+asm jg ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0001
+end
+
+case cond_jg_C0S1Z0N1
+asm jg ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0001
+end
+
+case cond_jg_C1S1Z0N0
+asm jg ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0001
+end
+
+case cond_jg_C0S0Z1N1
+asm jg ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0001
+end
+
+case cond_jvc_C0S0Z0N0
+asm jvc ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0002
+end
+
+case cond_jvc_C1S0Z1N0
+asm jvc ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0002
+end
+
+case cond_jvc_C0S1Z0N1
+asm jvc ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0002
+end
+
+case cond_jvc_C1S1Z0N0
+asm jvc ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0001
+end
+
+case cond_jvc_C0S0Z1N1
+asm jvc ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0001
+end
+
+case cond_jvs_C0S0Z0N0
+asm jvs ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0000
+expect r1 0x0001
+end
+
+case cond_jvs_C1S0Z1N0
+asm jvs ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0140
+expect r1 0x0001
+end
+
+case cond_jvs_C0S1Z0N1
+asm jvs ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0280
+expect r1 0x0001
+end
+
+case cond_jvs_C1S1Z0N0
+asm jvs ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x00c0
+expect r1 0x0002
+end
+
+case cond_jvs_C0S0Z1N1
+asm jvs ltaken
+asm ld r1, #1
+asm jmp lend
+asm ltaken:
+asm ld r1, #2
+asm lend:
+set sr 0x0300
+expect r1 0x0002
+end
+
+
+# ---- extended group (prefix 0xff80): hand-encoded, the MAME disassembly in the comment shows the intent ----
+case ext_register_add
+hex 80ff 0901
+set r8 0x1111
+set r9 0x2222
+expect r8 0x3333
+expect sr 0x0000
+end
+
+case ext_imm16_with_extended_source
+hex 80ff 4805 3412
+set r8 0x1000
+expect r10 0x2234
+end
+
+case ext_post_increment_load_add
+hex 80ff 9202
+set r9 0x0010
+set r10 0x0300
+set ram:300 0x0005
+expect r9 0x0015
+expect r10 0x0301
+end
+
+case ext_bp_relative_load
+hex 80ff c598
+set bp 0x0200
+set ram:205 0xCAFE
+expect r12 0xCAFE
+end
+
+case ext_push
+hex 80ff 2092
+set sp 0x0100
+set r9 0x4321
+expect ram:100 0x4321
+expect sp 0x00FF
+end
+
+case ext_pop
+hex 80ff 2010
+set sp 0x00FF
+set ram:100 0x1234
+expect r9 0x1234
+expect sp 0x0100
+end
+
+case ext_store_absolute
+hex 80ff 7bd0 3412
+set r11 0x7777
+expect ram:1234 0x7777
+end
+
+case reti_restores_sr_pc_and_clears_irq_state
+asm reti
+set sp 0x00FE
+set ram:ff 0x0140
+set ram:100 0x0900
+set in_irq 1
+until 900
+expect PC 0x0900
+expect sr 0x0140
+expect sp 0x0100
+expect in_irq 0
+end
+
+case reti_clears_fiq_state_first
+asm reti
+set sp 0x00FE
+set ram:ff 0x0000
+set ram:100 0x0900
+set in_irq 1
+set in_fiq 1
+until 900
+expect in_fiq 0
+expect in_irq 1
+end
+
+case retf_far_return_uses_popped_cs
+asm retf
+set sp 0x00FE
+set ram:ff 0x0003
+set ram:100 0x1234
+until 31234
+expect PC 0x31234
+expect sp 0x0100
+end
+
+case break_pushes_and_takes_vector
+asm break
+set sp 0x0100
+set ram:fff5 0x0900
+set sr 0x0140
+until 900
+expect PC 0x0900
+expect sp 0x00FE
+expect ram:100 0x0801
+expect ram:ff 0x0140
+end
+
+case call_mr_far_call
+hex 61f1
+set r3 0x2000
+set r4 0x0001
+set sp 0x0100
+until 12000
+expect PC 0x12000
+expect sp 0x00FE
+expect ram:100 0x0801
+end
+
+case goto_mr
+hex c0fe
+set r3 0x0123
+set r4 0x0002
+until 20123
+expect PC 0x20123
+end
+
+case ds_moves
+hex 29f0 22f0
+set r1 0x0003
+expect r2 0x0003
+expect sr 0x0C00
+end
+
+case ds_is_six_bits
+hex 29f0 22f0
+set r1 0x004A
+expect r2 0x000A
+end
+
+case fr_moves
+hex 39f0 32f0
+set r1 0xA5A5
+expect r2 0xA5A5
+expect fr 0xA5A5
+end

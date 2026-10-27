@@ -85,8 +85,8 @@ define token instr(16)
     Bv=(0, 2)
     imm6=(0, 5)
     bfn=(4, 5)
-    bimm=(0, 3)
-    muln=(3, 6)
+    bimm=(0, 3) dec
+    muln=(3, 6) dec
     sk=(4, 6)
     bit3=(3, 3)
     iclass=(3, 5)
@@ -166,13 +166,13 @@ def sec(title):
 # ------------------------------------------------------------------------------------------------
 def gen_operands():
     sec("Memory operands (usable as source and destination)")
-    emit('OpdBP: "[bp+" ^ imm6 ^ "]" is op1=0 & imm6 { local ad:3 = zext(bp + imm6); export *[ram]:2 ad; }')
-    emit('OpdDirect: "[" ^ imm6 ^ "]" is op1=7 & imm6 { local ad:3 = imm6; export *[ram]:2 ad; }')
+    emit('OpdBP: "[bp+"imm6"]" is op1=0 & imm6 { local ad:3 = zext(bp + imm6); export *[ram]:2 ad; }')
+    emit('OpdDirect: "["imm6"]" is op1=7 & imm6 { local ad:3 = imm6; export *[ram]:2 ad; }')
     # indirect modes through B (pointer register), page 0 or DS:
     modes = [
-        ('"[" ^ B ^ "]"', 0), ('"[" ^ B ^ "--]"', 1), ('"[" ^ B ^ "++]"', 2), ('"[++" ^ B ^ "]"', 3),
-        ('"ds:[" ^ B ^ "]"', 4), ('"ds:[" ^ B ^ "--]"', 5), ('"ds:[" ^ B ^ "++]"', 6),
-        ('"ds:[++" ^ B ^ "]"', 7)]
+        ('"["B"]"', 0), ('"["B"--]"', 1), ('"["B"++]"', 2), ('"[++"B"]"', 3),
+        ('"ds:["B"]"', 4), ('"ds:["B"--]"', 5), ('"ds:["B"++]"', 6),
+        ('"ds:[++"B"]"', 7)]
     for disp, n in modes:
         for pc in (False, True):
             cond = "Bv=7" if pc else "Bv<7"
@@ -282,7 +282,7 @@ def goto_res():
 
 
 def carry_sfx(key):
-    return ' "," "carry"' if key in CARRY else ""
+    return '", carry"' if key in CARRY else ""
 
 
 def gen_alu():
@@ -355,7 +355,7 @@ def gen_alu16():
                 base = f"op0={op0:#x} & op1=4 & N={n}{regpat}"
                 if n in (1, 2):
                     mem = n == 2
-                    od = '"[" ^ imm16 ^ "]"' if mem else "imm16"
+                    od = '"["imm16"]"' if mem else "imm16"
                     rd_pre = ["build RdV;", "build RsV;", "local va:2 = RsV;"]
                     rd_pre += ["local ma:3 = imm16;", "local vb:2 = *[ram]:2 ma;"] if mem else ["local vb:2 = imm16;"]
                     if key in ("cmp", "test"):
@@ -381,13 +381,13 @@ def gen_alu16():
                     pre = ["build RdV;", "build RsV;", "local va:2 = RsV;", "local vb:2 = RdV;", "local ma:3 = imm16;"]
                     if key in ("load", "store"):
                         bl = ["local res:2 = vb;"] + (["setNZ(res);"] if key == "load" else [])
-                        disp = '"[" ^ imm16 ^ "]" "=" RdV'
+                        disp = '"["imm16"]" "=" RdV'
                     elif key == "neg":
                         bl = ["local res:2 = -vb;", "setNZ(res);"]
-                        disp = '"[" ^ imm16 ^ "]" "=" "-" RdV'
+                        disp = '"["imm16"]" "=" "-" RdV'
                     else:
                         bl = alu_body(key, "va", "vb") if k != 7 else alu_nf(key, "va", "vb")
-                        disp = f'"[" ^ imm16 ^ "]" "=" RsV "{OPSYM[key]}" RdV{carry_sfx(key)}'
+                        disp = f'"["imm16"]" "=" RsV "{OPSYM[key]}" RdV{carry_sfx(key)}'
                     body = " ".join(pre + bl + ["*[ram]:2 ma = res;"])
                     pc_split = "" if same else (" & Av!=7",) 
                     if same:
@@ -455,7 +455,7 @@ def gen_stack():
                 for r in regs:
                     body += [rd_reg(r, "v"), "ad = zext(PtrW);", "*[ram]:2 ad = v;", "PtrW = PtrW - 1;"]
                 first = REGN[a - n + 1] if n else REGN[(a + 1) % 8]
-                emit(f':push "{first}" "," "{REGN[a]}" "to" "[" ^ PtrW ^ "]" is op0=0xd & op1=2 & Av={a} & N={n} & PtrW '
+                emit(f':push "{first}, {REGN[a]}" "to" "["PtrW"]" is op0=0xd & op1=2 & Av={a} & N={n} & PtrW '
                      f'{{ {" ".join(body)} }}')
             if a + n <= 7 and not (a == 7 and n == 0):
                 regs = [a + 1 + i for i in range(n)]
@@ -471,7 +471,7 @@ def gen_stack():
                 first = REGN[(a + 1) % 8]
                 last = REGN[a + n] if n else REGN[a]
                 extra = " & Bv!=0" if (a, n) == (5, 2) else ""
-                emit(f':pop "{first}" "," "{last}" "from" "[" ^ PtrW ^ "]" is op0=0x9 & op1=2 & Av={a} & N={n} & PtrW{extra} '
+                emit(f':pop "{first}, {last}" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av={a} & N={n} & PtrW{extra} '
                      f'{{ {" ".join(body)} }}')
     body = ["sp = sp + 1;", "local ad:3 = zext(sp);", "sr = *[ram]:2 ad;", "sp = sp + 1;", "ad = zext(sp);",
             "pc = *[ram]:2 ad;", "local tgt:3 = (zext(cs_sr) << 16) | zext(pc);"]
@@ -507,7 +507,7 @@ def gen_mul():
             ("us", "op0=0xf & Av!=7 & op1=0 & N<4"),
             ("ss", "op0=0xf & op1=4 & N=1")]
     for kind, pat in cons:
-        emit(f':"MR" "=" RdV "*" RsV "," "{kind}" is {pat} & RdV & RsV '
+        emit(f':"MR =" RdV"*"RsV", {kind}" is {pat} & RdV & RsV '
              f'{{ build RdV; build RsV; local va:2 = RdV; local vb:2 = RsV; local m:4 = {prod[kind]}; '
              f'r3 = m:2; r4 = m(2); }}')
     sec("Multiply-accumulate (inner product): MR = sum([rd+i] * [rs+i]), n terms (0 means 16)")
@@ -526,7 +526,7 @@ def gen_mul():
                 body += ["*[ram]:2 a1 = old;"]
             body += ["old = v1;", f"<nf{i}>", "PtrA = PtrA + 1;", "PtrW = PtrW + 1;"]
         body += ["<done>", "r3 = sum:2; r4 = sum(2);"]
-        emit(f':"MR" "=" "[" ^ PtrA ^ "]" "*" "[" ^ PtrW ^ "]" "," "{kind}" "," MulN is {pat} & PtrA & PtrW & muln & MulN '
+        emit(f':"MR =" "["PtrA"]*["PtrW"]"", {kind},"MulN is {pat} & PtrA & PtrW & muln & MulN '
              f'{{ {" ".join(body)} }}')
 
 
@@ -564,7 +564,7 @@ def gen_bitops():
         # memory forms: pointer is Rd; op1=4 [Rd],Rs  5 ds:[Rd],Rs  6 [Rd],imm  7 ds:[Rd],imm
         for op1, ds, imm in ((4, False, False), (5, True, False), (6, False, True), (7, True, True)):
             ptr = "(zext(ds) << 16) | zext(RdV)" if ds else "zext(RdV)"
-            pdisp = '"ds:[" ^ RdV ^ "]"' if ds else '"[" ^ RdV ^ "]"'
+            pdisp = '"ds:["RdV"]"' if ds else '"["RdV"]"'
             if imm:
                 emit(f':{fn} {pdisp}, bimm is op0=0xe & op1={op1} & bfn={fi} & bimm & RdV '
                      f'{{ build RdV; local ad:3 = {ptr}; local t:2 = *[ram]:2 ad; local k:2 = bimm; '
@@ -577,7 +577,7 @@ def gen_bitops():
         for ds in (False, True):
             ad = "(zext(ds) << 16) | i3" if ds else "i3"
             pat = f"op0=0xf & A9=1 & A10={1 if ds else 0} & op1=1 & bfn={fi} & bimm"
-            disp = ('"ds:[" ^ imm16 ^ "]"' if ds else '"[" ^ imm16 ^ "]"')
+            disp = ('"ds:["imm16"]"' if ds else '"["imm16"]"')
             emit(f':{fn} {disp}, bimm is ({pat}) ; imm16 '
                  f'{{ local i3:3 = imm16; local ad:3 = {ad}; local t:2 = *[ram]:2 ad; local k:2 = bimm; {" ".join(act("t", "k"))} '
                  f'{"*[ram]:2 ad = t;" if fn != "tstb" else ""} }}')
@@ -623,9 +623,9 @@ def gen_misc():
          'local rp:3 = inst_next; rp = rp >> 1; local r:2 = rp:2; local ad:3 = zext(sp); *[ram]:2 ad = r; sp = sp - 1; '
          'local s:2; srnow(s); ad = zext(sp); *[ram]:2 ad = s; sp = sp - 1; '
          'local vec:3 = 0xfff5; local t:3 = zext(*[ram]:2 vec); call [t]; }')
-    emit(':"divs" "mr" "," "r2" is op0=0xf & op1=5 & Nhi=1 & Bv=2 { local m:4 = (zext(r4) << 16) | zext(r3); '
+    emit(':"divs mr, r2" is op0=0xf & op1=5 & Nhi=1 & Bv=2 { local m:4 = (zext(r4) << 16) | zext(r3); '
          'local o:4 = divs_op(m, r2); r3 = o:2; r4 = o(2); }')
-    emit(':"divq" "mr" "," "r2" is op0=0xf & op1=5 & Nhi=1 & Bv=3 { local m:4 = (zext(r4) << 16) | zext(r3); '
+    emit(':"divq mr, r2" is op0=0xf & op1=5 & Nhi=1 & Bv=3 { local m:4 = (zext(r4) << 16) | zext(r3); '
          'local o:4 = divq_op(m, r2); r3 = o:2; r4 = o(2); }')
     emit(':"r2" "=" "exp" "r4" is op0=0xf & op1=5 & Nhi=1 & Bv=4 { r2 = exp_op(r4); }')
     emit(':"nop" is op0=0xf & op1=5 & Nhi=1 & Bv=5 { }')
@@ -694,7 +694,7 @@ def gen_ext():
             if g == 1:
                 od = "imm16"
             elif g == 2:
-                od = '"[" ^ imm16 ^ "]"'
+                od = '"["imm16"]"'
             if g in (1, 2):
                 pre = ["build XRsV;", "build XRdV;", "local va:2 = XRsV;"]
                 pre += ["local vb:2 = imm16;"] if g == 1 else ["local ma:3 = imm16;", "local vb:2 = *[ram]:2 ma;"]
@@ -702,7 +702,7 @@ def gen_ext():
                     if g == 2:
                         # [imm16] = rd
                         body = " ".join(["build XRsV;", "local ma:3 = imm16;", "*[ram]:2 ma = XRsV;"])
-                        emit(f':"[" ^ imm16 ^ "]" "=" XRsV is {PRE}(op0={op0:#x} & x76=1 & x54={x54} & XRsV) ; imm16 {{ {body} }}')
+                        emit(f':"["imm16"]" "=" XRsV is {PRE}(op0={op0:#x} & x76=1 & x54={x54} & XRsV) ; imm16 {{ {body} }}')
                     continue
                 if key in WRITES:
                     if key == "load":
@@ -730,23 +730,23 @@ def gen_ext():
                     continue
                 if key == "store":
                     body = " ".join(["build XRsV;", "local ma:3 = imm16;", "*[ram]:2 ma = XRsV;"])
-                    emit(f':"[" ^ imm16 ^ "]" "=" XRsV is {PRE}(op0={op0:#x} & x76=1 & x54=3 & XRsV) ; imm16 {{ {body} }}')
+                    emit(f':"["imm16"]" "=" XRsV is {PRE}(op0={op0:#x} & x76=1 & x54=3 & XRsV) ; imm16 {{ {body} }}')
                     continue
                 if key == "load":
                     bl = ["local res:2 = vb;", "setNZ(res);"]
-                    disp = '"[" ^ imm16 ^ "]" "=" XRdV'
+                    disp = '"["imm16"]" "=" XRdV'
                 elif key == "neg":
                     bl = ["local res:2 = -vb;", "setNZ(res);"]
-                    disp = '"[" ^ imm16 ^ "]" "=" "-" XRdV'
+                    disp = '"["imm16"]" "=" "-" XRdV'
                 else:
                     bl = alu_body(key, "va", "vb")
-                    disp = f'"[" ^ imm16 ^ "]" "=" XRsV "{OPSYM[key]}" XRdV{carry_sfx(key)}'
+                    disp = f'"["imm16"]" "=" XRsV "{OPSYM[key]}" XRdV{carry_sfx(key)}'
                 body = " ".join(pre + bl + ["*[ram]:2 ma = res;"])
                 emit(f':{disp} is {PRE}(op0={op0:#x} & x76=1 & x54=3 & XRdV & XRsV) ; imm16 {{ {body} }}')
         # groups 4..8: rd = r8+A op operand
         forms = []
-        for mode, (nm, ptrfmt) in enumerate((("", '"[" ^ XRpW ^ "]"'), ("--", '"[" ^ XRpW ^ "--]"'),
-                                             ("++", '"[" ^ XRpW ^ "++]"'), ("pre", '"[++" ^ XRpW ^ "]"'))):
+        for mode, (nm, ptrfmt) in enumerate((("", '"["XRpW"]"'), ("--", '"["XRpW"--]"'),
+                                             ("++", '"["XRpW"++]"'), ("pre", '"[++"XRpW"]"'))):
             forms.append((f"g4m{mode}", f"x8=0 & x76=2 & Nhi=0 & Nlo={mode} & XRpW", ptrfmt, mode, False))
             forms.append((f"g5m{mode}", f"x8=0 & x76=2 & Nhi=1 & Nlo={mode} & XRpW",
                           ptrfmt.replace('"[', '"ds:[', 1), mode, True))
@@ -770,9 +770,9 @@ def gen_ext():
                 lines.append(f"local ad:3 = {'(zext(ds) << 16) | zext(XRpW)' if ds else 'zext(XRpW)'};")
             ext_mem(op0, key, pat, disp, lines, "*[ram]:2 ad")
         ext_mem(op0, key, "x8=1 & x76=2 & imm6", 'imm6', ["local iv:2 = imm6;"], "iv", imm=True)
-        ext_mem(op0, key, "x8=0 & x76=3 & imm6", '"[bp+" ^ imm6 ^ "]"',
+        ext_mem(op0, key, "x8=0 & x76=3 & imm6", '"[bp+"imm6"]"',
                 ["local ad:3 = zext(bp + imm6);"], "*[ram]:2 ad")
-        ext_mem(op0, key, "x8=1 & x76=3 & imm6", '"[" ^ imm6 ^ "]"', ["local ad:3 = imm6;"], "*[ram]:2 ad")
+        ext_mem(op0, key, "x8=1 & x76=3 & imm6", '"["imm6"]"', ["local ad:3 = imm6;"], "*[ram]:2 ad")
     # push / pop of r8..r15 (register numbers wrap inside the bank)
     for n in range(8):
         for a in range(8):
@@ -782,13 +782,13 @@ def gen_ext():
                 body += ["XPtr = XPtr + 1;", "ad = zext(XPtr);", f"r{r} = *[ram]:2 ad;"]
             first = 8 + ((a + 1) & 7)
             last = 8 + ((a + n) & 7) if n else 8 + a
-            emit(f':pop "r{first}" "," "r{last}" "from" "[" ^ XPtr ^ "]" is {PRE}(op0={n} & Av={a} & x8=0 & x76=0 & x54=2 & XPtr) {{ {" ".join(body)} }}')
+            emit(f':pop "r{first}, r{last}" "from" "["XPtr"]" is {PRE}(op0={n} & Av={a} & x8=0 & x76=0 & x54=2 & XPtr) {{ {" ".join(body)} }}')
             pushregs = [8 + ((a - i) & 7) for i in range(n)]
             body = ["build XPtr;", "local v:2;", "local ad:3;"]
             for r in pushregs:
                 body += [f"v = r{r};", "ad = zext(XPtr);", "*[ram]:2 ad = v;", "XPtr = XPtr - 1;"]
             second = 8 + ((a - n + 1) & 7) if n else 8 + ((a + 1) & 7)
-            emit(f':push "r{8 + a}" "," "r{second}" "to" "[" ^ XPtr ^ "]" is {PRE}(op0={8 + n} & Av={a} & x8=0 & x76=0 & x54=2 & XPtr) {{ {" ".join(body)} }}')
+            emit(f':push "r{8 + a}, r{second}" "to" "["XPtr"]" is {PRE}(op0={8 + n} & Av={a} & x8=0 & x76=0 & x54=2 & XPtr) {{ {" ".join(body)} }}')
 
 
 def ext_mem(op0, key, pat, disp, lines, mem, imm=False):
