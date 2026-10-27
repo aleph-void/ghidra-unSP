@@ -6,3 +6,5 @@ bin/
 .gradle/
 build/
 dist/
+*.sla.lock
+__pycache__/

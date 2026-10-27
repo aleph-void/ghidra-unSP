@@ -70,6 +70,13 @@ define pcodeop rol_op;
 define pcodeop ror_op;
 define pcodeop mulsum_pc_op;
 
+define register offset=0x60 size=4 [ contextreg ];
+
+# SECBANK state: tracked as context so that r1-r4 select sr1-sr4 after 'secbank on' (and back after 'off')
+define context contextreg
+    secb=(0, 0)
+;
+
 define token instr(16)
     op0=(12, 15)
     A=(9, 11)
@@ -133,25 +140,9 @@ macro setNZ(v) {
 
 # register operands --------------------------------------------------------------------------------
 # value of the A / B register: SR carries the live CS, PC reads as the address after the instruction
-RdV: A is A & Av<6 { export A; }
-RdV: A is A & Av=6 { local t:2; srnow(t); export t; }
-RdV: A is A & Av=7 { local t:2; pcnext(t); export t; }
-RsV: B is B & Bv<6 { export B; }
-RsV: B is B & Bv=6 { local t:2; srnow(t); export t; }
-RsV: B is B & Bv=7 { local t:2; pcnext(t); export t; }
-# destination (Av<7); PC destinations get their own constructors
-RdW: A is A & Av<7 { export A; }
-RdD: A is A & Av { }
-# destination register B (ds / fr moves): PC is written through the pc alias and followed
-PtrW: B is B & Bv<7 { export B; }
-PtrW: B is B & Bv=7 { local t:2; pcnext(t); export t; }
-PtrA: A is A & Av<7 { export A; }
-PtrA: A is A & Av=7 { local t:2; pcnext(t); export t; }
-RsW: B is B & Bv<7 { export B; }
-RsW: B is B & Bv=7 { export pc; }
 PostB: is Bv<7 { }
 PostB: is Bv=7 { local t:3; pagetarget(t, pc); goto [t]; }
-# register B as a pointer (indirect modes, push/pop): PC reads as the next address (no write back)
+RdD: A is A & Av { }
 '''
 
 
@@ -164,6 +155,51 @@ def sec(title):
 # ------------------------------------------------------------------------------------------------
 # Addressing forms (the "operand" table).  Each constructor exports the value (or the memory cell).
 # ------------------------------------------------------------------------------------------------
+def gen_regtabs():
+    sec("Register operand tables (r1-r4 read sr1-sr4 while the SECBANK context bit is set)")
+    for n in range(1, 5):
+        emit(f"RB{n}: is secb=0 {{ export r{n}; }}")
+        emit(f"RB{n}: is secb=1 {{ export sr{n}; }}")
+    names = ["sp", "r1", "r2", "r3", "r4", "bp"]
+
+    def exp(k, f):
+        """constructor header/body for register number k of field f ('A' or 'B')."""
+        v = f + "v"
+        if k <= 5:
+            if 1 <= k <= 4:
+                return [(f"{f} & {v}={k} & secb=0", f"export r{k};"), (f"{f} & {v}={k} & secb=1", f"export sr{k};")]
+            return [(f"{f} & {v}={k}", f"export {names[k]};")]
+        if k == 6:
+            return [(f"{f} & {v}=6", "local t:2; srnow(t); export t;")]
+        return [(f"{f} & {v}=7", "local t:2; pcnext(t); export t;")]
+
+    def lval(k, f):
+        v = f + "v"
+        if k <= 5:
+            if 1 <= k <= 4:
+                return [(f"{f} & {v}={k} & secb=0", f"export r{k};"), (f"{f} & {v}={k} & secb=1", f"export sr{k};")]
+            return [(f"{f} & {v}={k}", f"export {names[k]};")]
+        if k == 6:
+            return [(f"{f} & {v}=6", "export sr;")]
+        return None
+
+    for tbl, f, ks_read, ks_write in (("RdV", "A", range(8), None), ("RsV", "B", range(8), None)):
+        for k in ks_read:
+            for pat, body in exp(k, f):
+                emit(f"{tbl}: {f} is {pat} {{ {body} }}")
+    for tbl, f in (("RdW", "A"), ("PtrW", "B"), ("PtrA", "A"), ("RsW", "B")):
+        for k in range(8):
+            lv = lval(k, f)
+            if lv is None:
+                if tbl in ("PtrW", "PtrA"):
+                    emit(f"{tbl}: {f} is {f} & {f}v=7 {{ local t:2; pcnext(t); export t; }}")
+                elif tbl == "RsW":
+                    emit(f"{tbl}: {f} is {f} & {f}v=7 {{ export pc; }}")
+                continue
+            for pat, body in lv:
+                emit(f"{tbl}: {f} is {pat} {{ {body} }}")
+
+
 def gen_operands():
     sec("Memory operands (usable as source and destination)")
     emit('OpdBP: "[bp+"imm6"]" is op1=0 & imm6 { local ad:3 = zext(bp + imm6); export *[ram]:2 ad; }')
@@ -174,32 +210,27 @@ def gen_operands():
         ('"ds:["B"]"', 4), ('"ds:["B"--]"', 5), ('"ds:["B"++]"', 6),
         ('"ds:[++"B"]"', 7)]
     for disp, n in modes:
-        for pc in (False, True):
-            cond = "Bv=7" if pc else "Bv<7"
-            body = []
-            ptr = "B"
-            if pc:
-                body.append("local ptr:2; pcnext(ptr);")
-                ptr = "ptr"
-            body.append("local ad:3;")
-            if n == 0:
-                body.append(f"ad = zext({ptr});")
-            elif n == 1:
-                body.append(f"ad = zext({ptr}); {ptr} = {ptr} - 1;")
-            elif n == 2:
-                body.append(f"ad = zext({ptr}); {ptr} = {ptr} + 1;")
-            elif n == 3:
-                body.append(f"{ptr} = {ptr} + 1; ad = zext({ptr});")
-            elif n == 4:
-                body.append(f"ad = (zext(ds) << 16) | zext({ptr});")
-            elif n == 5:
-                body.append(f"ad = (zext(ds) << 16) | zext({ptr}); {ptr} = {ptr} - 1; local wr:1 = {ptr} == 0xffff; ds = ds - wr;")
-            elif n == 6:
-                body.append(f"ad = (zext(ds) << 16) | zext({ptr}); {ptr} = {ptr} + 1; local wr:1 = {ptr} == 0; ds = ds + wr;")
-            elif n == 7:
-                body.append(f"{ptr} = {ptr} + 1; local wr:1 = {ptr} == 0; ds = ds + wr; ad = (zext(ds) << 16) | zext({ptr});")
-            body.append("export *[ram]:2 ad;")
-            emit(f"OpdInd: {disp} is op1=3 & N={n} & {cond} & B {{ {' '.join(body)} }}")
+        disp = disp.replace('"["B', '"["PtrW').replace('"ds:["B', '"ds:["PtrW').replace('"[++"B', '"[++"PtrW').replace('"ds:[++"B', '"ds:[++"PtrW')
+        body = ["local ad:3;"]
+        ptr = "PtrW"
+        if n == 0:
+            body.append(f"ad = zext({ptr});")
+        elif n == 1:
+            body.append(f"ad = zext({ptr}); {ptr} = {ptr} - 1;")
+        elif n == 2:
+            body.append(f"ad = zext({ptr}); {ptr} = {ptr} + 1;")
+        elif n == 3:
+            body.append(f"{ptr} = {ptr} + 1; ad = zext({ptr});")
+        elif n == 4:
+            body.append(f"ad = (zext(ds) << 16) | zext({ptr});")
+        elif n == 5:
+            body.append(f"ad = (zext(ds) << 16) | zext({ptr}); {ptr} = {ptr} - 1; local wr:1 = {ptr} == 0xffff; ds = ds - wr;")
+        elif n == 6:
+            body.append(f"ad = (zext(ds) << 16) | zext({ptr}); {ptr} = {ptr} + 1; local wr:1 = {ptr} == 0; ds = ds + wr;")
+        elif n == 7:
+            body.append(f"{ptr} = {ptr} + 1; local wr:1 = {ptr} == 0; ds = ds + wr; ad = (zext(ds) << 16) | zext({ptr});")
+        body.append("export *[ram]:2 ad;")
+        emit(f"OpdInd: {disp} is op1=3 & N={n} & PtrW {{ {' '.join(body)} }}")
     emit('OpdM: OpdBP is OpdBP { export OpdBP; }')
     emit('OpdM: OpdInd is OpdInd { export OpdInd; }')
     emit('OpdM: OpdDirect is OpdDirect { export OpdDirect; }')
@@ -440,7 +471,13 @@ def rd_reg(i, tmp):
         return f"srnow({tmp});"
     if i == 7:
         return f"pcnext({tmp});"
+    if 1 <= i <= 4:
+        return f"{tmp} = RB{i};"
     return f"{tmp} = {REGN[i]};"
+
+
+def rbpat(regs):
+    return "".join(f" & RB{r}" for r in sorted(set(regs)) if 1 <= r <= 4)
 
 
 def gen_stack():
@@ -455,14 +492,14 @@ def gen_stack():
                 for r in regs:
                     body += [rd_reg(r, "v"), "ad = zext(PtrW);", "*[ram]:2 ad = v;", "PtrW = PtrW - 1;"]
                 first = REGN[a - n + 1] if n else REGN[(a + 1) % 8]
-                emit(f':push "{first}, {REGN[a]}" "to" "["PtrW"]" is op0=0xd & op1=2 & Av={a} & N={n} & PtrW '
+                emit(f':push "{first}, {REGN[a]}" "to" "["PtrW"]" is op0=0xd & op1=2 & Av={a} & N={n} & PtrW{rbpat(regs)} '
                      f'{{ {" ".join(body)} }}')
             if a + n <= 7 and not (a == 7 and n == 0):
                 regs = [a + 1 + i for i in range(n)]
                 body = ["build PtrW;", "local ad:3;"]
                 for r in regs:
                     body += ["PtrW = PtrW + 1;", "ad = zext(PtrW);"]
-                    body += ["pc = *[ram]:2 ad;" if r == 7 else f"{REGN[r]} = *[ram]:2 ad;"]
+                    body += ["pc = *[ram]:2 ad;" if r == 7 else (f"RB{r} = *[ram]:2 ad;" if 1 <= r <= 4 else f"{REGN[r]} = *[ram]:2 ad;")]
                 if 7 in regs:
                     if 6 in regs:
                         body += ["local tgt:3 = (zext(cs_sr) << 16) | zext(pc);", "return [tgt];"]
@@ -471,7 +508,7 @@ def gen_stack():
                 first = REGN[(a + 1) % 8]
                 last = REGN[a + n] if n else REGN[a]
                 extra = " & Bv!=0" if (a, n) == (5, 2) else ""
-                emit(f':pop "{first}, {last}" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av={a} & N={n} & PtrW{extra} '
+                emit(f':pop "{first}, {last}" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av={a} & N={n} & PtrW{rbpat(regs)}{extra} '
                      f'{{ {" ".join(body)} }}')
     body = ["sp = sp + 1;", "local ad:3 = zext(sp);", "sr = *[ram]:2 ad;", "sp = sp + 1;", "ad = zext(sp);",
             "pc = *[ram]:2 ad;", "local tgt:3 = (zext(cs_sr) << 16) | zext(pc);"]
@@ -490,9 +527,9 @@ def gen_callgoto():
     emit("GotoAddr: addr is (op0=0xf & Av=7 & op1=2 & imm6) ; imm16 [ addr = (imm6 << 16) | imm16; ] { export *[ram]:3 addr; }")
     emit(f":call FarAddr is FarAddr {{ {PUSH_CALL} call FarAddr; }}")
     emit(":goto GotoAddr is GotoAddr { goto GotoAddr; }")
-    emit(f":call \"mr\" is op0=0xf & op1=5 & Nhi=1 & Bv=1 {{ {PUSH_CALL.replace('inst_next', 'inst_next')} "
-         "local t:3 = (zext(r4 & 0x3f) << 16) | zext(r3); call [t]; }")
-    emit(":goto \"mr\" is op0=0xf & Av=7 & op1=3 { local t:3 = (zext(r4 & 0x3f) << 16) | zext(r3); goto [t]; }")
+    emit(f":call \"mr\" is op0=0xf & op1=5 & Nhi=1 & Bv=1 & RB3 & RB4 {{ {PUSH_CALL.replace('inst_next', 'inst_next')} "
+         "local t:3 = (zext(RB4 & 0x3f) << 16) | zext(RB3); call [t]; }")
+    emit(":goto \"mr\" is op0=0xf & Av=7 & op1=3 & RB3 & RB4 { local t:3 = (zext(RB4 & 0x3f) << 16) | zext(RB3); goto [t]; }")
 
 
 # ------------------------------------------------------------------------------------------------
@@ -507,9 +544,9 @@ def gen_mul():
             ("us", "op0=0xf & Av!=7 & op1=0 & N<4"),
             ("ss", "op0=0xf & op1=4 & N=1")]
     for kind, pat in cons:
-        emit(f':"MR =" RdV"*"RsV", {kind}" is {pat} & RdV & RsV '
+        emit(f':"MR =" RdV"*"RsV", {kind}" is {pat} & RdV & RsV & RB3 & RB4 '
              f'{{ build RdV; build RsV; local va:2 = RdV; local vb:2 = RsV; local m:4 = {prod[kind]}; '
-             f'r3 = m:2; r4 = m(2); }}')
+             f'RB3 = m:2; RB4 = m(2); }}')
     sec("Multiply-accumulate (inner product): MR = sum([rd+i] * [rs+i]), n terms (0 means 16)")
     kinds = [("uu", "op0=0xe & (op1=2 | op1=3)"), ("us", "op0=0xf & Av!=7 & (op1=2 | op1=3)"),
              ("ss", "op0=0xf & (op1=6 | op1=7)")]
@@ -525,8 +562,8 @@ def gen_mul():
             if i:
                 body += ["*[ram]:2 a1 = old;"]
             body += ["old = v1;", f"<nf{i}>", "PtrA = PtrA + 1;", "PtrW = PtrW + 1;"]
-        body += ["<done>", "r3 = sum:2; r4 = sum(2);"]
-        emit(f':"MR =" "["PtrA"]*["PtrW"]"", {kind},"MulN is {pat} & PtrA & PtrW & muln & MulN '
+        body += ["<done>", "RB3 = sum:2; RB4 = sum(2);"]
+        emit(f':"MR =" "["PtrA"]*["PtrW"]"", {kind},"MulN is {pat} & PtrA & PtrW & muln & MulN & RB3 & RB4 '
              f'{{ {" ".join(body)} }}')
 
 
@@ -556,10 +593,10 @@ def gen_bitops():
         # register forms: op1=0 (bit in Rs, bit3=0) / op1=1 (immediate), Av<7 (Av=7 is a jump)
         reg_t = ["local t:2 = RdV;"]
         w = ["RdW = t;"] if fn != "tstb" else []
-        emit(f':{fn} RdW, RsV is op0=0xe & op1=0 & bit3=0 & bfn={fi} & RdW & RdV & RsV '
+        emit(f':{fn} RdW, RsV is op0=0xe & op1=0 & bit3=0 & bfn={fi} & Av<7 & RdW & RdV & RsV '
              f'{{ build RdV; build RsV; local t:2 = RdV; local k:2 = RsV & 0xf; '
              f'{" ".join(act("t", "k"))} {" ".join(w)} }}')
-        emit(f':{fn} RdW, bimm is op0=0xe & op1=1 & bfn={fi} & bimm & RdW & RdV '
+        emit(f':{fn} RdW, bimm is op0=0xe & op1=1 & bfn={fi} & bimm & Av<7 & RdW & RdV '
              f'{{ build RdV; local t:2 = RdV; local k:2 = bimm; {" ".join(act("t", "k"))} {" ".join(w)} }}')
         # memory forms: pointer is Rd; op1=4 [Rd],Rs  5 ds:[Rd],Rs  6 [Rd],imm  7 ds:[Rd],imm
         for op1, ds, imm in ((4, False, False), (5, True, False), (6, False, True), (7, True, True)):
@@ -618,16 +655,19 @@ def gen_misc():
     emit(':^RsW "=" "fr" is op0=0xf & Av!=7 & op1=0 & N=6 & RsW & PostB { build RsW; RsW = fr; build PostB; }')
     emit(':"fr" "=" RsV is op0=0xf & Av!=7 & op1=0 & N=7 & RsV { build RsV; fr = RsV; }')
     for code, a, b, body in INT_OPS:
-        emit(f':{a} {b} is op0=0xf & op1=5 & imm6={code:#x} {{ {body} }}')
+        ctx = ""
+        if code in (0x0a, 0x0b):   # SECBANK OFF / ON: the context bit switches r1-r4 <-> sr1-sr4 from the next instruction
+            ctx = f"[ secb = {code & 1}; globalset(inst_next, secb); ] "
+        emit(f':{a} {b} is op0=0xf & op1=5 & imm6={code:#x} {ctx}{{ {body} }}')
     emit(':"break" is op0=0xf & op1=5 & Nhi=1 & Bv=0 { '
          'local rp:3 = inst_next; rp = rp >> 1; local r:2 = rp:2; local ad:3 = zext(sp); *[ram]:2 ad = r; sp = sp - 1; '
          'local s:2; srnow(s); ad = zext(sp); *[ram]:2 ad = s; sp = sp - 1; '
          'local vec:3 = 0xfff5; local t:3 = zext(*[ram]:2 vec); call [t]; }')
-    emit(':"divs mr, r2" is op0=0xf & op1=5 & Nhi=1 & Bv=2 { local m:4 = (zext(r4) << 16) | zext(r3); '
-         'local o:4 = divs_op(m, r2); r3 = o:2; r4 = o(2); }')
-    emit(':"divq mr, r2" is op0=0xf & op1=5 & Nhi=1 & Bv=3 { local m:4 = (zext(r4) << 16) | zext(r3); '
-         'local o:4 = divq_op(m, r2); r3 = o:2; r4 = o(2); }')
-    emit(':"r2" "=" "exp" "r4" is op0=0xf & op1=5 & Nhi=1 & Bv=4 { r2 = exp_op(r4); }')
+    emit(':"divs mr, r2" is op0=0xf & op1=5 & Nhi=1 & Bv=2 & RB2 & RB3 & RB4 { local m:4 = (zext(RB4) << 16) | zext(RB3); '
+         'local o:4 = divs_op(m, RB2); RB3 = o:2; RB4 = o(2); }')
+    emit(':"divq mr, r2" is op0=0xf & op1=5 & Nhi=1 & Bv=3 & RB2 & RB3 & RB4 { local m:4 = (zext(RB4) << 16) | zext(RB3); '
+         'local o:4 = divq_op(m, RB2); RB3 = o:2; RB4 = o(2); }')
+    emit(':"r2" "=" "exp" "r4" is op0=0xf & op1=5 & Nhi=1 & Bv=4 & RB2 & RB4 { RB2 = exp_op(RB4); }')
     emit(':"nop" is op0=0xf & op1=5 & Nhi=1 & Bv=5 { }')
 
 
@@ -642,28 +682,40 @@ REGN16 = REGN + ["r%d" % i for i in range(8, 16)]
 def gen_ext():
     sec("u'nSP 2.0 extended group (prefix 0xff80)")
     emit("# Registers of the extended group: XRd = {bit 8, A}, XRs = {bit 3, B}, XRa = r8+A, XRp = r8+B")
-    for tbl, hi, lo, shown in (("XRdV", "x8", "Av", "A"), ("XRsV", "bit3", "Bv", "B")):
+    def xexp(k, extra):
+        """(extra pattern, body) pairs for the register number k (0-15), banked r1-r4"""
+        reg = REGN16[k]
+        if 1 <= k <= 4:
+            return [(" & secb=0", f"export r{k};"), (" & secb=1", f"export sr{k};")]
+        return [("", f"export {reg};")]
+
+    for tbl, hi, lo in (("XRdV", "x8", "Av"), ("XRsV", "bit3", "Bv")):
         for k in range(16):
-            cond = f"{hi}={k >> 3} & {lo}={k & 7}"
             reg = REGN16[k]
+            cond = f"{hi}={k >> 3} & {lo}={k & 7}"
             if k == 6:
-                body = "local t:2; srnow(t); export t;"
+                emit(f'{tbl}: "{reg}" is {cond} {{ local t:2; srnow(t); export t; }}')
             elif k == 7:
-                body = "local t:2; pcnext(t); export t;"
+                emit(f'{tbl}: "{reg}" is {cond} {{ local t:2; pcnext(t); export t; }}')
             else:
-                body = f"export {reg};"
-            emit(f'{tbl}: "{reg}" is {cond} {{ {body} }}')
+                for extra, body in xexp(k, ""):
+                    emit(f'{tbl}: "{reg}" is {cond}{extra} {{ {body} }}')
     for k in range(16):
         reg = REGN16[k]
-        body = "local t:2; pcnext(t); export t;" if k == 7 else f"export {reg};"
-        emit(f'XPtr: "{reg}" is bit3={k >> 3} & Bv={k & 7} {{ {body} }}')
+        if k == 7:
+            emit(f'XPtr: "{reg}" is bit3={k >> 3} & Bv={k & 7} {{ local t:2; pcnext(t); export t; }}')
+            continue
+        for extra, body in xexp(k, ""):
+            emit(f'XPtr: "{reg}" is bit3={k >> 3} & Bv={k & 7}{extra} {{ {body} }}')
     for k in range(16):
         if k == 7:
             continue
-        emit(f'XRdW: "{REGN16[k]}" is x8={k >> 3} & Av={k & 7} {{ export {REGN16[k]}; }}')
+        for extra, body in xexp(k, ""):
+            emit(f'XRdW: "{REGN16[k]}" is x8={k >> 3} & Av={k & 7}{extra} {{ {body} }}')
     for k in range(16):
         if k != 7:
-            emit(f'XRsW: "{REGN16[k]}" is bit3={k >> 3} & Bv={k & 7} {{ export {REGN16[k]}; }}')
+            for extra, body in xexp(k, ""):
+                emit(f'XRsW: "{REGN16[k]}" is bit3={k >> 3} & Bv={k & 7}{extra} {{ {body} }}')
     for k in range(8):
         emit(f'XRaV: "r{8 + k}" is Av={k} {{ export r{8 + k}; }}')
         emit(f'XRaW: "r{8 + k}" is Av={k} {{ export r{8 + k}; }}')
@@ -815,6 +867,7 @@ def main():
     outp = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "..", "data", "languages", "unsp.slaspec")
     emit(HEADER)
+    gen_regtabs()
     gen_operands()
     gen_alu()
     gen_alu16()

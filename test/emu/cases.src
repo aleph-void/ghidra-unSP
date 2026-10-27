@@ -1325,3 +1325,22 @@ set r1 0xA5A5
 expect r2 0xA5A5
 expect fr 0xA5A5
 end
+
+# ---- SECBANK: r1-r4 are switched to sr1-sr4 by 'secbank on' (context tracked through the code) ----
+case secbank_switches_register_bank
+hex 4bf1 4592 4af1 4694
+set r1 0x1111
+expect sr1 0x0005
+expect r1 0x1111
+expect r2 0x0006
+end
+
+case secbank_reads_banked_registers
+hex 4bf1 0203 4af1
+set r1 0x0001
+set r2 0x0002
+set sr1 0x0010
+set sr2 0x0020
+expect sr1 0x0030
+expect r1 0x0001
+end

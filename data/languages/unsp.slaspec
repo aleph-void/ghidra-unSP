@@ -49,6 +49,13 @@ define pcodeop rol_op;
 define pcodeop ror_op;
 define pcodeop mulsum_pc_op;
 
+define register offset=0x60 size=4 [ contextreg ];
+
+# SECBANK state: tracked as context so that r1-r4 select sr1-sr4 after 'secbank on' (and back after 'off')
+define context contextreg
+    secb=(0, 0)
+;
+
 define token instr(16)
     op0=(12, 15)
     A=(9, 11)
@@ -112,47 +119,105 @@ macro setNZ(v) {
 
 # register operands --------------------------------------------------------------------------------
 # value of the A / B register: SR carries the live CS, PC reads as the address after the instruction
-RdV: A is A & Av<6 { export A; }
-RdV: A is A & Av=6 { local t:2; srnow(t); export t; }
-RdV: A is A & Av=7 { local t:2; pcnext(t); export t; }
-RsV: B is B & Bv<6 { export B; }
-RsV: B is B & Bv=6 { local t:2; srnow(t); export t; }
-RsV: B is B & Bv=7 { local t:2; pcnext(t); export t; }
-# destination (Av<7); PC destinations get their own constructors
-RdW: A is A & Av<7 { export A; }
-RdD: A is A & Av { }
-# destination register B (ds / fr moves): PC is written through the pc alias and followed
-PtrW: B is B & Bv<7 { export B; }
-PtrW: B is B & Bv=7 { local t:2; pcnext(t); export t; }
-PtrA: A is A & Av<7 { export A; }
-PtrA: A is A & Av=7 { local t:2; pcnext(t); export t; }
-RsW: B is B & Bv<7 { export B; }
-RsW: B is B & Bv=7 { export pc; }
 PostB: is Bv<7 { }
 PostB: is Bv=7 { local t:3; pagetarget(t, pc); goto [t]; }
-# register B as a pointer (indirect modes, push/pop): PC reads as the next address (no write back)
+RdD: A is A & Av { }
 
+
+# ------------------------------------------------------------------------------------------
+# Register operand tables (r1-r4 read sr1-sr4 while the SECBANK context bit is set)
+RB1: is secb=0 { export r1; }
+RB1: is secb=1 { export sr1; }
+RB2: is secb=0 { export r2; }
+RB2: is secb=1 { export sr2; }
+RB3: is secb=0 { export r3; }
+RB3: is secb=1 { export sr3; }
+RB4: is secb=0 { export r4; }
+RB4: is secb=1 { export sr4; }
+RdV: A is A & Av=0 { export sp; }
+RdV: A is A & Av=1 & secb=0 { export r1; }
+RdV: A is A & Av=1 & secb=1 { export sr1; }
+RdV: A is A & Av=2 & secb=0 { export r2; }
+RdV: A is A & Av=2 & secb=1 { export sr2; }
+RdV: A is A & Av=3 & secb=0 { export r3; }
+RdV: A is A & Av=3 & secb=1 { export sr3; }
+RdV: A is A & Av=4 & secb=0 { export r4; }
+RdV: A is A & Av=4 & secb=1 { export sr4; }
+RdV: A is A & Av=5 { export bp; }
+RdV: A is A & Av=6 { local t:2; srnow(t); export t; }
+RdV: A is A & Av=7 { local t:2; pcnext(t); export t; }
+RsV: B is B & Bv=0 { export sp; }
+RsV: B is B & Bv=1 & secb=0 { export r1; }
+RsV: B is B & Bv=1 & secb=1 { export sr1; }
+RsV: B is B & Bv=2 & secb=0 { export r2; }
+RsV: B is B & Bv=2 & secb=1 { export sr2; }
+RsV: B is B & Bv=3 & secb=0 { export r3; }
+RsV: B is B & Bv=3 & secb=1 { export sr3; }
+RsV: B is B & Bv=4 & secb=0 { export r4; }
+RsV: B is B & Bv=4 & secb=1 { export sr4; }
+RsV: B is B & Bv=5 { export bp; }
+RsV: B is B & Bv=6 { local t:2; srnow(t); export t; }
+RsV: B is B & Bv=7 { local t:2; pcnext(t); export t; }
+RdW: A is A & Av=0 { export sp; }
+RdW: A is A & Av=1 & secb=0 { export r1; }
+RdW: A is A & Av=1 & secb=1 { export sr1; }
+RdW: A is A & Av=2 & secb=0 { export r2; }
+RdW: A is A & Av=2 & secb=1 { export sr2; }
+RdW: A is A & Av=3 & secb=0 { export r3; }
+RdW: A is A & Av=3 & secb=1 { export sr3; }
+RdW: A is A & Av=4 & secb=0 { export r4; }
+RdW: A is A & Av=4 & secb=1 { export sr4; }
+RdW: A is A & Av=5 { export bp; }
+RdW: A is A & Av=6 { export sr; }
+PtrW: B is B & Bv=0 { export sp; }
+PtrW: B is B & Bv=1 & secb=0 { export r1; }
+PtrW: B is B & Bv=1 & secb=1 { export sr1; }
+PtrW: B is B & Bv=2 & secb=0 { export r2; }
+PtrW: B is B & Bv=2 & secb=1 { export sr2; }
+PtrW: B is B & Bv=3 & secb=0 { export r3; }
+PtrW: B is B & Bv=3 & secb=1 { export sr3; }
+PtrW: B is B & Bv=4 & secb=0 { export r4; }
+PtrW: B is B & Bv=4 & secb=1 { export sr4; }
+PtrW: B is B & Bv=5 { export bp; }
+PtrW: B is B & Bv=6 { export sr; }
+PtrW: B is B & Bv=7 { local t:2; pcnext(t); export t; }
+PtrA: A is A & Av=0 { export sp; }
+PtrA: A is A & Av=1 & secb=0 { export r1; }
+PtrA: A is A & Av=1 & secb=1 { export sr1; }
+PtrA: A is A & Av=2 & secb=0 { export r2; }
+PtrA: A is A & Av=2 & secb=1 { export sr2; }
+PtrA: A is A & Av=3 & secb=0 { export r3; }
+PtrA: A is A & Av=3 & secb=1 { export sr3; }
+PtrA: A is A & Av=4 & secb=0 { export r4; }
+PtrA: A is A & Av=4 & secb=1 { export sr4; }
+PtrA: A is A & Av=5 { export bp; }
+PtrA: A is A & Av=6 { export sr; }
+PtrA: A is A & Av=7 { local t:2; pcnext(t); export t; }
+RsW: B is B & Bv=0 { export sp; }
+RsW: B is B & Bv=1 & secb=0 { export r1; }
+RsW: B is B & Bv=1 & secb=1 { export sr1; }
+RsW: B is B & Bv=2 & secb=0 { export r2; }
+RsW: B is B & Bv=2 & secb=1 { export sr2; }
+RsW: B is B & Bv=3 & secb=0 { export r3; }
+RsW: B is B & Bv=3 & secb=1 { export sr3; }
+RsW: B is B & Bv=4 & secb=0 { export r4; }
+RsW: B is B & Bv=4 & secb=1 { export sr4; }
+RsW: B is B & Bv=5 { export bp; }
+RsW: B is B & Bv=6 { export sr; }
+RsW: B is B & Bv=7 { export pc; }
 
 # ------------------------------------------------------------------------------------------
 # Memory operands (usable as source and destination)
 OpdBP: "[bp+"imm6"]" is op1=0 & imm6 { local ad:3 = zext(bp + imm6); export *[ram]:2 ad; }
 OpdDirect: "["imm6"]" is op1=7 & imm6 { local ad:3 = imm6; export *[ram]:2 ad; }
-OpdInd: "["B"]" is op1=3 & N=0 & Bv<7 & B { local ad:3; ad = zext(B); export *[ram]:2 ad; }
-OpdInd: "["B"]" is op1=3 & N=0 & Bv=7 & B { local ptr:2; pcnext(ptr); local ad:3; ad = zext(ptr); export *[ram]:2 ad; }
-OpdInd: "["B"--]" is op1=3 & N=1 & Bv<7 & B { local ad:3; ad = zext(B); B = B - 1; export *[ram]:2 ad; }
-OpdInd: "["B"--]" is op1=3 & N=1 & Bv=7 & B { local ptr:2; pcnext(ptr); local ad:3; ad = zext(ptr); ptr = ptr - 1; export *[ram]:2 ad; }
-OpdInd: "["B"++]" is op1=3 & N=2 & Bv<7 & B { local ad:3; ad = zext(B); B = B + 1; export *[ram]:2 ad; }
-OpdInd: "["B"++]" is op1=3 & N=2 & Bv=7 & B { local ptr:2; pcnext(ptr); local ad:3; ad = zext(ptr); ptr = ptr + 1; export *[ram]:2 ad; }
-OpdInd: "[++"B"]" is op1=3 & N=3 & Bv<7 & B { local ad:3; B = B + 1; ad = zext(B); export *[ram]:2 ad; }
-OpdInd: "[++"B"]" is op1=3 & N=3 & Bv=7 & B { local ptr:2; pcnext(ptr); local ad:3; ptr = ptr + 1; ad = zext(ptr); export *[ram]:2 ad; }
-OpdInd: "ds:["B"]" is op1=3 & N=4 & Bv<7 & B { local ad:3; ad = (zext(ds) << 16) | zext(B); export *[ram]:2 ad; }
-OpdInd: "ds:["B"]" is op1=3 & N=4 & Bv=7 & B { local ptr:2; pcnext(ptr); local ad:3; ad = (zext(ds) << 16) | zext(ptr); export *[ram]:2 ad; }
-OpdInd: "ds:["B"--]" is op1=3 & N=5 & Bv<7 & B { local ad:3; ad = (zext(ds) << 16) | zext(B); B = B - 1; local wr:1 = B == 0xffff; ds = ds - wr; export *[ram]:2 ad; }
-OpdInd: "ds:["B"--]" is op1=3 & N=5 & Bv=7 & B { local ptr:2; pcnext(ptr); local ad:3; ad = (zext(ds) << 16) | zext(ptr); ptr = ptr - 1; local wr:1 = ptr == 0xffff; ds = ds - wr; export *[ram]:2 ad; }
-OpdInd: "ds:["B"++]" is op1=3 & N=6 & Bv<7 & B { local ad:3; ad = (zext(ds) << 16) | zext(B); B = B + 1; local wr:1 = B == 0; ds = ds + wr; export *[ram]:2 ad; }
-OpdInd: "ds:["B"++]" is op1=3 & N=6 & Bv=7 & B { local ptr:2; pcnext(ptr); local ad:3; ad = (zext(ds) << 16) | zext(ptr); ptr = ptr + 1; local wr:1 = ptr == 0; ds = ds + wr; export *[ram]:2 ad; }
-OpdInd: "ds:[++"B"]" is op1=3 & N=7 & Bv<7 & B { local ad:3; B = B + 1; local wr:1 = B == 0; ds = ds + wr; ad = (zext(ds) << 16) | zext(B); export *[ram]:2 ad; }
-OpdInd: "ds:[++"B"]" is op1=3 & N=7 & Bv=7 & B { local ptr:2; pcnext(ptr); local ad:3; ptr = ptr + 1; local wr:1 = ptr == 0; ds = ds + wr; ad = (zext(ds) << 16) | zext(ptr); export *[ram]:2 ad; }
+OpdInd: "["PtrW"]" is op1=3 & N=0 & PtrW { local ad:3; ad = zext(PtrW); export *[ram]:2 ad; }
+OpdInd: "["PtrW"--]" is op1=3 & N=1 & PtrW { local ad:3; ad = zext(PtrW); PtrW = PtrW - 1; export *[ram]:2 ad; }
+OpdInd: "["PtrW"++]" is op1=3 & N=2 & PtrW { local ad:3; ad = zext(PtrW); PtrW = PtrW + 1; export *[ram]:2 ad; }
+OpdInd: "[++"PtrW"]" is op1=3 & N=3 & PtrW { local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); export *[ram]:2 ad; }
+OpdInd: "ds:["PtrW"]" is op1=3 & N=4 & PtrW { local ad:3; ad = (zext(ds) << 16) | zext(PtrW); export *[ram]:2 ad; }
+OpdInd: "ds:["PtrW"--]" is op1=3 & N=5 & PtrW { local ad:3; ad = (zext(ds) << 16) | zext(PtrW); PtrW = PtrW - 1; local wr:1 = PtrW == 0xffff; ds = ds - wr; export *[ram]:2 ad; }
+OpdInd: "ds:["PtrW"++]" is op1=3 & N=6 & PtrW { local ad:3; ad = (zext(ds) << 16) | zext(PtrW); PtrW = PtrW + 1; local wr:1 = PtrW == 0; ds = ds + wr; export *[ram]:2 ad; }
+OpdInd: "ds:[++"PtrW"]" is op1=3 & N=7 & PtrW { local ad:3; PtrW = PtrW + 1; local wr:1 = PtrW == 0; ds = ds + wr; ad = (zext(ds) << 16) | zext(PtrW); export *[ram]:2 ad; }
 OpdM: OpdBP is OpdBP { export OpdBP; }
 OpdM: OpdInd is OpdInd { export OpdInd; }
 OpdM: OpdDirect is OpdDirect { export OpdDirect; }
@@ -387,68 +452,68 @@ RelN6: addr is imm6 [ addr = inst_next - imm6; ] { export *[ram]:3 addr; }
 :push "pc, sr" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=6 & N=0 & PtrW { build PtrW; local v:2; local ad:3; }
 :pop "pc, sr" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=6 & N=0 & PtrW { build PtrW; local ad:3; }
 :push "sp, sp" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=0 & N=1 & PtrW { build PtrW; local v:2; local ad:3; v = sp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r1, r1" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=1 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r1 = *[ram]:2 ad; }
-:push "r1, r1" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=1 & N=1 & PtrW { build PtrW; local v:2; local ad:3; v = r1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r2, r2" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=1 & N=1 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r2 = *[ram]:2 ad; }
-:push "r2, r2" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=2 & N=1 & PtrW { build PtrW; local v:2; local ad:3; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r3, r3" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=2 & N=1 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; }
-:push "r3, r3" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=3 & N=1 & PtrW { build PtrW; local v:2; local ad:3; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r4, r4" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=3 & N=1 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; }
-:push "r4, r4" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=4 & N=1 & PtrW { build PtrW; local v:2; local ad:3; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r1, r1" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=1 & PtrW & RB1 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB1 = *[ram]:2 ad; }
+:push "r1, r1" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=1 & N=1 & PtrW & RB1 { build PtrW; local v:2; local ad:3; v = RB1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r2, r2" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=1 & N=1 & PtrW & RB2 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB2 = *[ram]:2 ad; }
+:push "r2, r2" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=2 & N=1 & PtrW & RB2 { build PtrW; local v:2; local ad:3; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r3, r3" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=2 & N=1 & PtrW & RB3 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; }
+:push "r3, r3" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=3 & N=1 & PtrW & RB3 { build PtrW; local v:2; local ad:3; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r4, r4" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=3 & N=1 & PtrW & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; }
+:push "r4, r4" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=4 & N=1 & PtrW & RB4 { build PtrW; local v:2; local ad:3; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
 :pop "bp, bp" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=4 & N=1 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; }
 :push "bp, bp" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=5 & N=1 & PtrW { build PtrW; local v:2; local ad:3; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
 :pop "sr, sr" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=5 & N=1 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; }
 :push "sr, sr" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=6 & N=1 & PtrW { build PtrW; local v:2; local ad:3; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
 :pop "pc, pc" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=6 & N=1 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); pc = *[ram]:2 ad; local tgt:3; pagetarget(tgt, pc); return [tgt]; }
 :push "pc, pc" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=7 & N=1 & PtrW { build PtrW; local v:2; local ad:3; pcnext(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r1, r2" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=2 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r1 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r2 = *[ram]:2 ad; }
-:push "sp, r1" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=1 & N=2 & PtrW { build PtrW; local v:2; local ad:3; v = r1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = sp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r2, r3" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=1 & N=2 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; }
-:push "r1, r2" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=2 & N=2 & PtrW { build PtrW; local v:2; local ad:3; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r3, r4" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=2 & N=2 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; }
-:push "r2, r3" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=3 & N=2 & PtrW { build PtrW; local v:2; local ad:3; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r4, bp" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=3 & N=2 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; }
-:push "r3, r4" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=4 & N=2 & PtrW { build PtrW; local v:2; local ad:3; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r1, r2" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=2 & PtrW & RB1 & RB2 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB1 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB2 = *[ram]:2 ad; }
+:push "sp, r1" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=1 & N=2 & PtrW & RB1 { build PtrW; local v:2; local ad:3; v = RB1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = sp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r2, r3" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=1 & N=2 & PtrW & RB2 & RB3 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; }
+:push "r1, r2" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=2 & N=2 & PtrW & RB1 & RB2 { build PtrW; local v:2; local ad:3; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r3, r4" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=2 & N=2 & PtrW & RB3 & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; }
+:push "r2, r3" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=3 & N=2 & PtrW & RB2 & RB3 { build PtrW; local v:2; local ad:3; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r4, bp" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=3 & N=2 & PtrW & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; }
+:push "r3, r4" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=4 & N=2 & PtrW & RB3 & RB4 { build PtrW; local v:2; local ad:3; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
 :pop "bp, sr" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=4 & N=2 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; }
-:push "r4, bp" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=5 & N=2 & PtrW { build PtrW; local v:2; local ad:3; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:push "r4, bp" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=5 & N=2 & PtrW & RB4 { build PtrW; local v:2; local ad:3; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
 :pop "sr, pc" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=5 & N=2 & PtrW & Bv!=0 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); pc = *[ram]:2 ad; local tgt:3 = (zext(cs_sr) << 16) | zext(pc); return [tgt]; }
 :push "bp, sr" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=6 & N=2 & PtrW { build PtrW; local v:2; local ad:3; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
 :push "sr, pc" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=7 & N=2 & PtrW { build PtrW; local v:2; local ad:3; pcnext(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r1, r3" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=3 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r1 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; }
-:pop "r2, r4" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=1 & N=3 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; }
-:push "sp, r2" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=2 & N=3 & PtrW { build PtrW; local v:2; local ad:3; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = sp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r3, bp" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=2 & N=3 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; }
-:push "r1, r3" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=3 & N=3 & PtrW { build PtrW; local v:2; local ad:3; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r4, sr" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=3 & N=3 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; }
-:push "r2, r4" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=4 & N=3 & PtrW { build PtrW; local v:2; local ad:3; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r1, r3" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=3 & PtrW & RB1 & RB2 & RB3 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB1 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; }
+:pop "r2, r4" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=1 & N=3 & PtrW & RB2 & RB3 & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; }
+:push "sp, r2" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=2 & N=3 & PtrW & RB1 & RB2 { build PtrW; local v:2; local ad:3; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = sp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r3, bp" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=2 & N=3 & PtrW & RB3 & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; }
+:push "r1, r3" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=3 & N=3 & PtrW & RB1 & RB2 & RB3 { build PtrW; local v:2; local ad:3; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r4, sr" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=3 & N=3 & PtrW & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; }
+:push "r2, r4" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=4 & N=3 & PtrW & RB2 & RB3 & RB4 { build PtrW; local v:2; local ad:3; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
 :pop "bp, pc" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=4 & N=3 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); pc = *[ram]:2 ad; local tgt:3 = (zext(cs_sr) << 16) | zext(pc); return [tgt]; }
-:push "r3, bp" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=5 & N=3 & PtrW { build PtrW; local v:2; local ad:3; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:push "r4, sr" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=6 & N=3 & PtrW { build PtrW; local v:2; local ad:3; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:push "r3, bp" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=5 & N=3 & PtrW & RB3 & RB4 { build PtrW; local v:2; local ad:3; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:push "r4, sr" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=6 & N=3 & PtrW & RB4 { build PtrW; local v:2; local ad:3; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
 :push "bp, pc" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=7 & N=3 & PtrW { build PtrW; local v:2; local ad:3; pcnext(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r1, r4" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=4 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r1 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; }
-:pop "r2, bp" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=1 & N=4 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; }
-:pop "r3, sr" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=2 & N=4 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; }
-:push "sp, r3" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=3 & N=4 & PtrW { build PtrW; local v:2; local ad:3; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = sp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r4, pc" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=3 & N=4 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); pc = *[ram]:2 ad; local tgt:3 = (zext(cs_sr) << 16) | zext(pc); return [tgt]; }
-:push "r1, r4" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=4 & N=4 & PtrW { build PtrW; local v:2; local ad:3; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:push "r2, bp" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=5 & N=4 & PtrW { build PtrW; local v:2; local ad:3; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:push "r3, sr" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=6 & N=4 & PtrW { build PtrW; local v:2; local ad:3; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:push "r4, pc" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=7 & N=4 & PtrW { build PtrW; local v:2; local ad:3; pcnext(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r1, bp" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=5 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r1 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; }
-:pop "r2, sr" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=1 & N=5 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; }
-:pop "r3, pc" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=2 & N=5 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); pc = *[ram]:2 ad; local tgt:3 = (zext(cs_sr) << 16) | zext(pc); return [tgt]; }
-:push "sp, r4" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=4 & N=5 & PtrW { build PtrW; local v:2; local ad:3; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = sp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:push "r1, bp" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=5 & N=5 & PtrW { build PtrW; local v:2; local ad:3; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:push "r2, sr" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=6 & N=5 & PtrW { build PtrW; local v:2; local ad:3; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:push "r3, pc" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=7 & N=5 & PtrW { build PtrW; local v:2; local ad:3; pcnext(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r1, sr" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=6 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r1 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; }
-:pop "r2, pc" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=1 & N=6 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); pc = *[ram]:2 ad; local tgt:3 = (zext(cs_sr) << 16) | zext(pc); return [tgt]; }
-:push "sp, bp" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=5 & N=6 & PtrW { build PtrW; local v:2; local ad:3; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = sp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:push "r1, sr" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=6 & N=6 & PtrW { build PtrW; local v:2; local ad:3; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:push "r2, pc" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=7 & N=6 & PtrW { build PtrW; local v:2; local ad:3; pcnext(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:pop "r1, pc" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=7 & PtrW { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); r1 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); r4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); pc = *[ram]:2 ad; local tgt:3 = (zext(cs_sr) << 16) | zext(pc); return [tgt]; }
-:push "sp, sr" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=6 & N=7 & PtrW { build PtrW; local v:2; local ad:3; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = sp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
-:push "r1, pc" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=7 & N=7 & PtrW { build PtrW; local v:2; local ad:3; pcnext(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = r1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r1, r4" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=4 & PtrW & RB1 & RB2 & RB3 & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB1 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; }
+:pop "r2, bp" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=1 & N=4 & PtrW & RB2 & RB3 & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; }
+:pop "r3, sr" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=2 & N=4 & PtrW & RB3 & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; }
+:push "sp, r3" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=3 & N=4 & PtrW & RB1 & RB2 & RB3 { build PtrW; local v:2; local ad:3; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = sp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r4, pc" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=3 & N=4 & PtrW & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); pc = *[ram]:2 ad; local tgt:3 = (zext(cs_sr) << 16) | zext(pc); return [tgt]; }
+:push "r1, r4" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=4 & N=4 & PtrW & RB1 & RB2 & RB3 & RB4 { build PtrW; local v:2; local ad:3; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:push "r2, bp" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=5 & N=4 & PtrW & RB2 & RB3 & RB4 { build PtrW; local v:2; local ad:3; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:push "r3, sr" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=6 & N=4 & PtrW & RB3 & RB4 { build PtrW; local v:2; local ad:3; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:push "r4, pc" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=7 & N=4 & PtrW & RB4 { build PtrW; local v:2; local ad:3; pcnext(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r1, bp" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=5 & PtrW & RB1 & RB2 & RB3 & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB1 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; }
+:pop "r2, sr" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=1 & N=5 & PtrW & RB2 & RB3 & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; }
+:pop "r3, pc" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=2 & N=5 & PtrW & RB3 & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); pc = *[ram]:2 ad; local tgt:3 = (zext(cs_sr) << 16) | zext(pc); return [tgt]; }
+:push "sp, r4" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=4 & N=5 & PtrW & RB1 & RB2 & RB3 & RB4 { build PtrW; local v:2; local ad:3; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = sp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:push "r1, bp" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=5 & N=5 & PtrW & RB1 & RB2 & RB3 & RB4 { build PtrW; local v:2; local ad:3; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:push "r2, sr" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=6 & N=5 & PtrW & RB2 & RB3 & RB4 { build PtrW; local v:2; local ad:3; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:push "r3, pc" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=7 & N=5 & PtrW & RB3 & RB4 { build PtrW; local v:2; local ad:3; pcnext(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r1, sr" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=6 & PtrW & RB1 & RB2 & RB3 & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB1 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; }
+:pop "r2, pc" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=1 & N=6 & PtrW & RB2 & RB3 & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); pc = *[ram]:2 ad; local tgt:3 = (zext(cs_sr) << 16) | zext(pc); return [tgt]; }
+:push "sp, bp" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=5 & N=6 & PtrW & RB1 & RB2 & RB3 & RB4 { build PtrW; local v:2; local ad:3; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = sp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:push "r1, sr" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=6 & N=6 & PtrW & RB1 & RB2 & RB3 & RB4 { build PtrW; local v:2; local ad:3; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:push "r2, pc" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=7 & N=6 & PtrW & RB2 & RB3 & RB4 { build PtrW; local v:2; local ad:3; pcnext(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:pop "r1, pc" "from" "["PtrW"]" is op0=0x9 & op1=2 & Av=0 & N=7 & PtrW & RB1 & RB2 & RB3 & RB4 { build PtrW; local ad:3; PtrW = PtrW + 1; ad = zext(PtrW); RB1 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB2 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB3 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); RB4 = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); bp = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); sr = *[ram]:2 ad; PtrW = PtrW + 1; ad = zext(PtrW); pc = *[ram]:2 ad; local tgt:3 = (zext(cs_sr) << 16) | zext(pc); return [tgt]; }
+:push "sp, sr" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=6 & N=7 & PtrW & RB1 & RB2 & RB3 & RB4 { build PtrW; local v:2; local ad:3; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = sp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
+:push "r1, pc" "to" "["PtrW"]" is op0=0xd & op1=2 & Av=7 & N=7 & PtrW & RB1 & RB2 & RB3 & RB4 { build PtrW; local v:2; local ad:3; pcnext(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; srnow(v); ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = bp; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB4; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB3; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB2; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; v = RB1; ad = zext(PtrW); *[ram]:2 ad = v; PtrW = PtrW - 1; }
 :retf is op0=0x9 & op1=2 & Av=5 & N=2 & Bv=0 { sp = sp + 1; local ad:3 = zext(sp); sr = *[ram]:2 ad; sp = sp + 1; ad = zext(sp); pc = *[ram]:2 ad; local tgt:3 = (zext(cs_sr) << 16) | zext(pc); return [tgt]; }
 :reti is op0=0x9 & op1=2 & Av=5 & N=3 & Bv=0 { sp = sp + 1; local ad:3 = zext(sp); sr = *[ram]:2 ad; sp = sp + 1; ad = zext(sp); pc = *[ram]:2 ad; local tgt:3 = (zext(cs_sr) << 16) | zext(pc); if (in_fiq == 0) goto <lirq>; in_fiq = 0; goto <ldone>; <lirq> in_irq = 0; <ldone> return [tgt]; }
 
@@ -458,52 +523,52 @@ FarAddr: addr is (op0=0xf & A9=0 & op1=1 & imm6) ; imm16 [ addr = (imm6 << 16) |
 GotoAddr: addr is (op0=0xf & Av=7 & op1=2 & imm6) ; imm16 [ addr = (imm6 << 16) | imm16; ] { export *[ram]:3 addr; }
 :call FarAddr is FarAddr { local rp:3 = inst_next; rp = rp >> 1; local r:2 = rp:2; local ad:3 = zext(sp); *[ram]:2 ad = r; sp = sp - 1; local s:2; srnow(s); ad = zext(sp); *[ram]:2 ad = s; sp = sp - 1; call FarAddr; }
 :goto GotoAddr is GotoAddr { goto GotoAddr; }
-:call "mr" is op0=0xf & op1=5 & Nhi=1 & Bv=1 { local rp:3 = inst_next; rp = rp >> 1; local r:2 = rp:2; local ad:3 = zext(sp); *[ram]:2 ad = r; sp = sp - 1; local s:2; srnow(s); ad = zext(sp); *[ram]:2 ad = s; sp = sp - 1; local t:3 = (zext(r4 & 0x3f) << 16) | zext(r3); call [t]; }
-:goto "mr" is op0=0xf & Av=7 & op1=3 { local t:3 = (zext(r4 & 0x3f) << 16) | zext(r3); goto [t]; }
+:call "mr" is op0=0xf & op1=5 & Nhi=1 & Bv=1 & RB3 & RB4 { local rp:3 = inst_next; rp = rp >> 1; local r:2 = rp:2; local ad:3 = zext(sp); *[ram]:2 ad = r; sp = sp - 1; local s:2; srnow(s); ad = zext(sp); *[ram]:2 ad = s; sp = sp - 1; local t:3 = (zext(RB4 & 0x3f) << 16) | zext(RB3); call [t]; }
+:goto "mr" is op0=0xf & Av=7 & op1=3 & RB3 & RB4 { local t:3 = (zext(RB4 & 0x3f) << 16) | zext(RB3); goto [t]; }
 
 # ------------------------------------------------------------------------------------------
 # Multiplication: MR = r4:r3
 MulN: "16" is muln=0 { }
 MulN: muln is muln { }
-:"MR =" RdV"*"RsV", uu" is op0=0xe & Av!=7 & op1=0 & N=1 & RdV & RsV { build RdV; build RsV; local va:2 = RdV; local vb:2 = RsV; local m:4 = zext(va) * zext(vb); r3 = m:2; r4 = m(2); }
-:"MR =" RdV"*"RsV", us" is op0=0xf & Av!=7 & op1=0 & N<4 & RdV & RsV { build RdV; build RsV; local va:2 = RdV; local vb:2 = RsV; local m:4 = zext(va) * sext(vb); r3 = m:2; r4 = m(2); }
-:"MR =" RdV"*"RsV", ss" is op0=0xf & op1=4 & N=1 & RdV & RsV { build RdV; build RsV; local va:2 = RdV; local vb:2 = RsV; local m:4 = sext(va) * sext(vb); r3 = m:2; r4 = m(2); }
+:"MR =" RdV"*"RsV", uu" is op0=0xe & Av!=7 & op1=0 & N=1 & RdV & RsV & RB3 & RB4 { build RdV; build RsV; local va:2 = RdV; local vb:2 = RsV; local m:4 = zext(va) * zext(vb); RB3 = m:2; RB4 = m(2); }
+:"MR =" RdV"*"RsV", us" is op0=0xf & Av!=7 & op1=0 & N<4 & RdV & RsV & RB3 & RB4 { build RdV; build RsV; local va:2 = RdV; local vb:2 = RsV; local m:4 = zext(va) * sext(vb); RB3 = m:2; RB4 = m(2); }
+:"MR =" RdV"*"RsV", ss" is op0=0xf & op1=4 & N=1 & RdV & RsV & RB3 & RB4 { build RdV; build RsV; local va:2 = RdV; local vb:2 = RsV; local m:4 = sext(va) * sext(vb); RB3 = m:2; RB4 = m(2); }
 
 # ------------------------------------------------------------------------------------------
 # Multiply-accumulate (inner product): MR = sum([rd+i] * [rs+i]), n terms (0 means 16)
-:"MR =" "["PtrA"]*["PtrW"]"", uu,"MulN is op0=0xe & (op1=2 | op1=3) & PtrA & PtrW & muln & MulN { build PtrA; build PtrW; local n:1 = muln:1; if (n != 0) goto <nz>; n = 16; <nz> local sum:4 = 0; local old:2 = 0; local v1:2 = 0; local v2:2 = 0; local a1:3 = 0; local a2:3 = 0; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf0>; old = v1; <nf0> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 1) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf1>; *[ram]:2 a1 = old; old = v1; <nf1> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 2) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf2>; *[ram]:2 a1 = old; old = v1; <nf2> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 3) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf3>; *[ram]:2 a1 = old; old = v1; <nf3> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 4) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf4>; *[ram]:2 a1 = old; old = v1; <nf4> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 5) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf5>; *[ram]:2 a1 = old; old = v1; <nf5> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 6) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf6>; *[ram]:2 a1 = old; old = v1; <nf6> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 7) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf7>; *[ram]:2 a1 = old; old = v1; <nf7> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 8) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf8>; *[ram]:2 a1 = old; old = v1; <nf8> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 9) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf9>; *[ram]:2 a1 = old; old = v1; <nf9> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 10) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf10>; *[ram]:2 a1 = old; old = v1; <nf10> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 11) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf11>; *[ram]:2 a1 = old; old = v1; <nf11> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 12) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf12>; *[ram]:2 a1 = old; old = v1; <nf12> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 13) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf13>; *[ram]:2 a1 = old; old = v1; <nf13> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 14) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf14>; *[ram]:2 a1 = old; old = v1; <nf14> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 15) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf15>; *[ram]:2 a1 = old; old = v1; <nf15> PtrA = PtrA + 1; PtrW = PtrW + 1; <done> r3 = sum:2; r4 = sum(2); }
-:"MR =" "["PtrA"]*["PtrW"]"", us,"MulN is op0=0xf & Av!=7 & (op1=2 | op1=3) & PtrA & PtrW & muln & MulN { build PtrA; build PtrW; local n:1 = muln:1; if (n != 0) goto <nz>; n = 16; <nz> local sum:4 = 0; local old:2 = 0; local v1:2 = 0; local v2:2 = 0; local a1:3 = 0; local a2:3 = 0; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf0>; old = v1; <nf0> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 1) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf1>; *[ram]:2 a1 = old; old = v1; <nf1> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 2) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf2>; *[ram]:2 a1 = old; old = v1; <nf2> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 3) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf3>; *[ram]:2 a1 = old; old = v1; <nf3> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 4) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf4>; *[ram]:2 a1 = old; old = v1; <nf4> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 5) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf5>; *[ram]:2 a1 = old; old = v1; <nf5> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 6) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf6>; *[ram]:2 a1 = old; old = v1; <nf6> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 7) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf7>; *[ram]:2 a1 = old; old = v1; <nf7> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 8) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf8>; *[ram]:2 a1 = old; old = v1; <nf8> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 9) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf9>; *[ram]:2 a1 = old; old = v1; <nf9> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 10) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf10>; *[ram]:2 a1 = old; old = v1; <nf10> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 11) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf11>; *[ram]:2 a1 = old; old = v1; <nf11> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 12) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf12>; *[ram]:2 a1 = old; old = v1; <nf12> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 13) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf13>; *[ram]:2 a1 = old; old = v1; <nf13> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 14) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf14>; *[ram]:2 a1 = old; old = v1; <nf14> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 15) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf15>; *[ram]:2 a1 = old; old = v1; <nf15> PtrA = PtrA + 1; PtrW = PtrW + 1; <done> r3 = sum:2; r4 = sum(2); }
-:"MR =" "["PtrA"]*["PtrW"]"", ss,"MulN is op0=0xf & (op1=6 | op1=7) & PtrA & PtrW & muln & MulN { build PtrA; build PtrW; local n:1 = muln:1; if (n != 0) goto <nz>; n = 16; <nz> local sum:4 = 0; local old:2 = 0; local v1:2 = 0; local v2:2 = 0; local a1:3 = 0; local a2:3 = 0; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf0>; old = v1; <nf0> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 1) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf1>; *[ram]:2 a1 = old; old = v1; <nf1> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 2) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf2>; *[ram]:2 a1 = old; old = v1; <nf2> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 3) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf3>; *[ram]:2 a1 = old; old = v1; <nf3> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 4) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf4>; *[ram]:2 a1 = old; old = v1; <nf4> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 5) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf5>; *[ram]:2 a1 = old; old = v1; <nf5> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 6) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf6>; *[ram]:2 a1 = old; old = v1; <nf6> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 7) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf7>; *[ram]:2 a1 = old; old = v1; <nf7> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 8) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf8>; *[ram]:2 a1 = old; old = v1; <nf8> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 9) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf9>; *[ram]:2 a1 = old; old = v1; <nf9> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 10) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf10>; *[ram]:2 a1 = old; old = v1; <nf10> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 11) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf11>; *[ram]:2 a1 = old; old = v1; <nf11> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 12) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf12>; *[ram]:2 a1 = old; old = v1; <nf12> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 13) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf13>; *[ram]:2 a1 = old; old = v1; <nf13> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 14) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf14>; *[ram]:2 a1 = old; old = v1; <nf14> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 15) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf15>; *[ram]:2 a1 = old; old = v1; <nf15> PtrA = PtrA + 1; PtrW = PtrW + 1; <done> r3 = sum:2; r4 = sum(2); }
+:"MR =" "["PtrA"]*["PtrW"]"", uu,"MulN is op0=0xe & (op1=2 | op1=3) & PtrA & PtrW & muln & MulN & RB3 & RB4 { build PtrA; build PtrW; local n:1 = muln:1; if (n != 0) goto <nz>; n = 16; <nz> local sum:4 = 0; local old:2 = 0; local v1:2 = 0; local v2:2 = 0; local a1:3 = 0; local a2:3 = 0; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf0>; old = v1; <nf0> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 1) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf1>; *[ram]:2 a1 = old; old = v1; <nf1> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 2) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf2>; *[ram]:2 a1 = old; old = v1; <nf2> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 3) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf3>; *[ram]:2 a1 = old; old = v1; <nf3> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 4) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf4>; *[ram]:2 a1 = old; old = v1; <nf4> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 5) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf5>; *[ram]:2 a1 = old; old = v1; <nf5> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 6) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf6>; *[ram]:2 a1 = old; old = v1; <nf6> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 7) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf7>; *[ram]:2 a1 = old; old = v1; <nf7> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 8) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf8>; *[ram]:2 a1 = old; old = v1; <nf8> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 9) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf9>; *[ram]:2 a1 = old; old = v1; <nf9> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 10) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf10>; *[ram]:2 a1 = old; old = v1; <nf10> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 11) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf11>; *[ram]:2 a1 = old; old = v1; <nf11> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 12) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf12>; *[ram]:2 a1 = old; old = v1; <nf12> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 13) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf13>; *[ram]:2 a1 = old; old = v1; <nf13> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 14) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf14>; *[ram]:2 a1 = old; old = v1; <nf14> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 15) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * zext(v2)); if (fir_mov == 0) goto <nf15>; *[ram]:2 a1 = old; old = v1; <nf15> PtrA = PtrA + 1; PtrW = PtrW + 1; <done> RB3 = sum:2; RB4 = sum(2); }
+:"MR =" "["PtrA"]*["PtrW"]"", us,"MulN is op0=0xf & Av!=7 & (op1=2 | op1=3) & PtrA & PtrW & muln & MulN & RB3 & RB4 { build PtrA; build PtrW; local n:1 = muln:1; if (n != 0) goto <nz>; n = 16; <nz> local sum:4 = 0; local old:2 = 0; local v1:2 = 0; local v2:2 = 0; local a1:3 = 0; local a2:3 = 0; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf0>; old = v1; <nf0> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 1) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf1>; *[ram]:2 a1 = old; old = v1; <nf1> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 2) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf2>; *[ram]:2 a1 = old; old = v1; <nf2> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 3) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf3>; *[ram]:2 a1 = old; old = v1; <nf3> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 4) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf4>; *[ram]:2 a1 = old; old = v1; <nf4> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 5) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf5>; *[ram]:2 a1 = old; old = v1; <nf5> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 6) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf6>; *[ram]:2 a1 = old; old = v1; <nf6> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 7) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf7>; *[ram]:2 a1 = old; old = v1; <nf7> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 8) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf8>; *[ram]:2 a1 = old; old = v1; <nf8> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 9) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf9>; *[ram]:2 a1 = old; old = v1; <nf9> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 10) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf10>; *[ram]:2 a1 = old; old = v1; <nf10> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 11) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf11>; *[ram]:2 a1 = old; old = v1; <nf11> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 12) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf12>; *[ram]:2 a1 = old; old = v1; <nf12> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 13) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf13>; *[ram]:2 a1 = old; old = v1; <nf13> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 14) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf14>; *[ram]:2 a1 = old; old = v1; <nf14> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 15) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (zext(v1) * sext(v2)); if (fir_mov == 0) goto <nf15>; *[ram]:2 a1 = old; old = v1; <nf15> PtrA = PtrA + 1; PtrW = PtrW + 1; <done> RB3 = sum:2; RB4 = sum(2); }
+:"MR =" "["PtrA"]*["PtrW"]"", ss,"MulN is op0=0xf & (op1=6 | op1=7) & PtrA & PtrW & muln & MulN & RB3 & RB4 { build PtrA; build PtrW; local n:1 = muln:1; if (n != 0) goto <nz>; n = 16; <nz> local sum:4 = 0; local old:2 = 0; local v1:2 = 0; local v2:2 = 0; local a1:3 = 0; local a2:3 = 0; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf0>; old = v1; <nf0> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 1) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf1>; *[ram]:2 a1 = old; old = v1; <nf1> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 2) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf2>; *[ram]:2 a1 = old; old = v1; <nf2> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 3) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf3>; *[ram]:2 a1 = old; old = v1; <nf3> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 4) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf4>; *[ram]:2 a1 = old; old = v1; <nf4> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 5) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf5>; *[ram]:2 a1 = old; old = v1; <nf5> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 6) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf6>; *[ram]:2 a1 = old; old = v1; <nf6> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 7) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf7>; *[ram]:2 a1 = old; old = v1; <nf7> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 8) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf8>; *[ram]:2 a1 = old; old = v1; <nf8> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 9) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf9>; *[ram]:2 a1 = old; old = v1; <nf9> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 10) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf10>; *[ram]:2 a1 = old; old = v1; <nf10> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 11) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf11>; *[ram]:2 a1 = old; old = v1; <nf11> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 12) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf12>; *[ram]:2 a1 = old; old = v1; <nf12> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 13) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf13>; *[ram]:2 a1 = old; old = v1; <nf13> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 14) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf14>; *[ram]:2 a1 = old; old = v1; <nf14> PtrA = PtrA + 1; PtrW = PtrW + 1; if (n <= 15) goto <done>; a1 = zext(PtrA); a2 = zext(PtrW); v1 = *[ram]:2 a1; v2 = *[ram]:2 a2; sum = sum + (sext(v1) * sext(v2)); if (fir_mov == 0) goto <nf15>; *[ram]:2 a1 = old; old = v1; <nf15> PtrA = PtrA + 1; PtrW = PtrW + 1; <done> RB3 = sum:2; RB4 = sum(2); }
 
 # ------------------------------------------------------------------------------------------
 # Bit operations: tstb / setb / clrb / invb (u'nSP 1.2+, memory-absolute forms 2.0)
 # TSTB sets Z when the tested bit is clear (u'nSP 1.1 programmer's guide convention, unverified here).
-:tstb RdW, RsV is op0=0xe & op1=0 & bit3=0 & bfn=0 & RdW & RdV & RsV { build RdV; build RsV; local t:2 = RdV; local k:2 = RsV & 0xf; local m:2 = 1 << (k); Z_flag = (t & m) == 0;  }
-:tstb RdW, bimm is op0=0xe & op1=1 & bfn=0 & bimm & RdW & RdV { build RdV; local t:2 = RdV; local k:2 = bimm; local m:2 = 1 << (k); Z_flag = (t & m) == 0;  }
+:tstb RdW, RsV is op0=0xe & op1=0 & bit3=0 & bfn=0 & Av<7 & RdW & RdV & RsV { build RdV; build RsV; local t:2 = RdV; local k:2 = RsV & 0xf; local m:2 = 1 << (k); Z_flag = (t & m) == 0;  }
+:tstb RdW, bimm is op0=0xe & op1=1 & bfn=0 & bimm & Av<7 & RdW & RdV { build RdV; local t:2 = RdV; local k:2 = bimm; local m:2 = 1 << (k); Z_flag = (t & m) == 0;  }
 :tstb "["RdV"]", RsV is op0=0xe & op1=4 & bit3=0 & bfn=0 & RdV & RsV { build RdV; build RsV; local ad:3 = zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = RsV & 0xf; local m:2 = 1 << (k); Z_flag = (t & m) == 0;  }
 :tstb "ds:["RdV"]", RsV is op0=0xe & op1=5 & bit3=0 & bfn=0 & RdV & RsV { build RdV; build RsV; local ad:3 = (zext(ds) << 16) | zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = RsV & 0xf; local m:2 = 1 << (k); Z_flag = (t & m) == 0;  }
 :tstb "["RdV"]", bimm is op0=0xe & op1=6 & bfn=0 & bimm & RdV { build RdV; local ad:3 = zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = bimm; local m:2 = 1 << (k); Z_flag = (t & m) == 0;  }
 :tstb "ds:["RdV"]", bimm is op0=0xe & op1=7 & bfn=0 & bimm & RdV { build RdV; local ad:3 = (zext(ds) << 16) | zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = bimm; local m:2 = 1 << (k); Z_flag = (t & m) == 0;  }
 :tstb "["imm16"]", bimm is (op0=0xf & A9=1 & A10=0 & op1=1 & bfn=0 & bimm) ; imm16 { local i3:3 = imm16; local ad:3 = i3; local t:2 = *[ram]:2 ad; local k:2 = bimm; local m:2 = 1 << (k); Z_flag = (t & m) == 0;  }
 :tstb "ds:["imm16"]", bimm is (op0=0xf & A9=1 & A10=1 & op1=1 & bfn=0 & bimm) ; imm16 { local i3:3 = imm16; local ad:3 = (zext(ds) << 16) | i3; local t:2 = *[ram]:2 ad; local k:2 = bimm; local m:2 = 1 << (k); Z_flag = (t & m) == 0;  }
-:setb RdW, RsV is op0=0xe & op1=0 & bit3=0 & bfn=1 & RdW & RdV & RsV { build RdV; build RsV; local t:2 = RdV; local k:2 = RsV & 0xf; local m:2 = 1 << (k); t = t | m; RdW = t; }
-:setb RdW, bimm is op0=0xe & op1=1 & bfn=1 & bimm & RdW & RdV { build RdV; local t:2 = RdV; local k:2 = bimm; local m:2 = 1 << (k); t = t | m; RdW = t; }
+:setb RdW, RsV is op0=0xe & op1=0 & bit3=0 & bfn=1 & Av<7 & RdW & RdV & RsV { build RdV; build RsV; local t:2 = RdV; local k:2 = RsV & 0xf; local m:2 = 1 << (k); t = t | m; RdW = t; }
+:setb RdW, bimm is op0=0xe & op1=1 & bfn=1 & bimm & Av<7 & RdW & RdV { build RdV; local t:2 = RdV; local k:2 = bimm; local m:2 = 1 << (k); t = t | m; RdW = t; }
 :setb "["RdV"]", RsV is op0=0xe & op1=4 & bit3=0 & bfn=1 & RdV & RsV { build RdV; build RsV; local ad:3 = zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = RsV & 0xf; local m:2 = 1 << (k); t = t | m; *[ram]:2 ad = t; }
 :setb "ds:["RdV"]", RsV is op0=0xe & op1=5 & bit3=0 & bfn=1 & RdV & RsV { build RdV; build RsV; local ad:3 = (zext(ds) << 16) | zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = RsV & 0xf; local m:2 = 1 << (k); t = t | m; *[ram]:2 ad = t; }
 :setb "["RdV"]", bimm is op0=0xe & op1=6 & bfn=1 & bimm & RdV { build RdV; local ad:3 = zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = bimm; local m:2 = 1 << (k); t = t | m; *[ram]:2 ad = t; }
 :setb "ds:["RdV"]", bimm is op0=0xe & op1=7 & bfn=1 & bimm & RdV { build RdV; local ad:3 = (zext(ds) << 16) | zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = bimm; local m:2 = 1 << (k); t = t | m; *[ram]:2 ad = t; }
 :setb "["imm16"]", bimm is (op0=0xf & A9=1 & A10=0 & op1=1 & bfn=1 & bimm) ; imm16 { local i3:3 = imm16; local ad:3 = i3; local t:2 = *[ram]:2 ad; local k:2 = bimm; local m:2 = 1 << (k); t = t | m; *[ram]:2 ad = t; }
 :setb "ds:["imm16"]", bimm is (op0=0xf & A9=1 & A10=1 & op1=1 & bfn=1 & bimm) ; imm16 { local i3:3 = imm16; local ad:3 = (zext(ds) << 16) | i3; local t:2 = *[ram]:2 ad; local k:2 = bimm; local m:2 = 1 << (k); t = t | m; *[ram]:2 ad = t; }
-:clrb RdW, RsV is op0=0xe & op1=0 & bit3=0 & bfn=2 & RdW & RdV & RsV { build RdV; build RsV; local t:2 = RdV; local k:2 = RsV & 0xf; local m:2 = 1 << (k); t = t & ~m; RdW = t; }
-:clrb RdW, bimm is op0=0xe & op1=1 & bfn=2 & bimm & RdW & RdV { build RdV; local t:2 = RdV; local k:2 = bimm; local m:2 = 1 << (k); t = t & ~m; RdW = t; }
+:clrb RdW, RsV is op0=0xe & op1=0 & bit3=0 & bfn=2 & Av<7 & RdW & RdV & RsV { build RdV; build RsV; local t:2 = RdV; local k:2 = RsV & 0xf; local m:2 = 1 << (k); t = t & ~m; RdW = t; }
+:clrb RdW, bimm is op0=0xe & op1=1 & bfn=2 & bimm & Av<7 & RdW & RdV { build RdV; local t:2 = RdV; local k:2 = bimm; local m:2 = 1 << (k); t = t & ~m; RdW = t; }
 :clrb "["RdV"]", RsV is op0=0xe & op1=4 & bit3=0 & bfn=2 & RdV & RsV { build RdV; build RsV; local ad:3 = zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = RsV & 0xf; local m:2 = 1 << (k); t = t & ~m; *[ram]:2 ad = t; }
 :clrb "ds:["RdV"]", RsV is op0=0xe & op1=5 & bit3=0 & bfn=2 & RdV & RsV { build RdV; build RsV; local ad:3 = (zext(ds) << 16) | zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = RsV & 0xf; local m:2 = 1 << (k); t = t & ~m; *[ram]:2 ad = t; }
 :clrb "["RdV"]", bimm is op0=0xe & op1=6 & bfn=2 & bimm & RdV { build RdV; local ad:3 = zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = bimm; local m:2 = 1 << (k); t = t & ~m; *[ram]:2 ad = t; }
 :clrb "ds:["RdV"]", bimm is op0=0xe & op1=7 & bfn=2 & bimm & RdV { build RdV; local ad:3 = (zext(ds) << 16) | zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = bimm; local m:2 = 1 << (k); t = t & ~m; *[ram]:2 ad = t; }
 :clrb "["imm16"]", bimm is (op0=0xf & A9=1 & A10=0 & op1=1 & bfn=2 & bimm) ; imm16 { local i3:3 = imm16; local ad:3 = i3; local t:2 = *[ram]:2 ad; local k:2 = bimm; local m:2 = 1 << (k); t = t & ~m; *[ram]:2 ad = t; }
 :clrb "ds:["imm16"]", bimm is (op0=0xf & A9=1 & A10=1 & op1=1 & bfn=2 & bimm) ; imm16 { local i3:3 = imm16; local ad:3 = (zext(ds) << 16) | i3; local t:2 = *[ram]:2 ad; local k:2 = bimm; local m:2 = 1 << (k); t = t & ~m; *[ram]:2 ad = t; }
-:invb RdW, RsV is op0=0xe & op1=0 & bit3=0 & bfn=3 & RdW & RdV & RsV { build RdV; build RsV; local t:2 = RdV; local k:2 = RsV & 0xf; local m:2 = 1 << (k); t = t ^ m; RdW = t; }
-:invb RdW, bimm is op0=0xe & op1=1 & bfn=3 & bimm & RdW & RdV { build RdV; local t:2 = RdV; local k:2 = bimm; local m:2 = 1 << (k); t = t ^ m; RdW = t; }
+:invb RdW, RsV is op0=0xe & op1=0 & bit3=0 & bfn=3 & Av<7 & RdW & RdV & RsV { build RdV; build RsV; local t:2 = RdV; local k:2 = RsV & 0xf; local m:2 = 1 << (k); t = t ^ m; RdW = t; }
+:invb RdW, bimm is op0=0xe & op1=1 & bfn=3 & bimm & Av<7 & RdW & RdV { build RdV; local t:2 = RdV; local k:2 = bimm; local m:2 = 1 << (k); t = t ^ m; RdW = t; }
 :invb "["RdV"]", RsV is op0=0xe & op1=4 & bit3=0 & bfn=3 & RdV & RsV { build RdV; build RsV; local ad:3 = zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = RsV & 0xf; local m:2 = 1 << (k); t = t ^ m; *[ram]:2 ad = t; }
 :invb "ds:["RdV"]", RsV is op0=0xe & op1=5 & bit3=0 & bfn=3 & RdV & RsV { build RdV; build RsV; local ad:3 = (zext(ds) << 16) | zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = RsV & 0xf; local m:2 = 1 << (k); t = t ^ m; *[ram]:2 ad = t; }
 :invb "["RdV"]", bimm is op0=0xe & op1=6 & bfn=3 & bimm & RdV { build RdV; local ad:3 = zext(RdV); local t:2 = *[ram]:2 ad; local k:2 = bimm; local m:2 = 1 << (k); t = t ^ m; *[ram]:2 ad = t; }
@@ -547,26 +612,30 @@ MulN: muln is muln { }
 :fraction "on" is op0=0xf & op1=5 & imm6=0x7 { fraction = 1; }
 :irq "off" is op0=0xf & op1=5 & imm6=0x8 { irq = 0; }
 :irq "on" is op0=0xf & op1=5 & imm6=0x9 { irq = 1; }
-:secbank "off" is op0=0xf & op1=5 & imm6=0xa { sec_bank = 0; }
-:secbank "on" is op0=0xf & op1=5 & imm6=0xb { sec_bank = 1; }
+:secbank "off" is op0=0xf & op1=5 & imm6=0xa [ secb = 0; globalset(inst_next, secb); ] { sec_bank = 0; }
+:secbank "on" is op0=0xf & op1=5 & imm6=0xb [ secb = 1; globalset(inst_next, secb); ] { sec_bank = 1; }
 :fiq "off" is op0=0xf & op1=5 & imm6=0xc { fiq = 0; }
 :irqnest "off" is op0=0xf & op1=5 & imm6=0xd { irqnest = 0; }
 :fiq "on" is op0=0xf & op1=5 & imm6=0xe { fiq = 1; }
 :irqnest "on" is op0=0xf & op1=5 & imm6=0xf { irqnest = 1; }
 :"break" is op0=0xf & op1=5 & Nhi=1 & Bv=0 { local rp:3 = inst_next; rp = rp >> 1; local r:2 = rp:2; local ad:3 = zext(sp); *[ram]:2 ad = r; sp = sp - 1; local s:2; srnow(s); ad = zext(sp); *[ram]:2 ad = s; sp = sp - 1; local vec:3 = 0xfff5; local t:3 = zext(*[ram]:2 vec); call [t]; }
-:"divs mr, r2" is op0=0xf & op1=5 & Nhi=1 & Bv=2 { local m:4 = (zext(r4) << 16) | zext(r3); local o:4 = divs_op(m, r2); r3 = o:2; r4 = o(2); }
-:"divq mr, r2" is op0=0xf & op1=5 & Nhi=1 & Bv=3 { local m:4 = (zext(r4) << 16) | zext(r3); local o:4 = divq_op(m, r2); r3 = o:2; r4 = o(2); }
-:"r2" "=" "exp" "r4" is op0=0xf & op1=5 & Nhi=1 & Bv=4 { r2 = exp_op(r4); }
+:"divs mr, r2" is op0=0xf & op1=5 & Nhi=1 & Bv=2 & RB2 & RB3 & RB4 { local m:4 = (zext(RB4) << 16) | zext(RB3); local o:4 = divs_op(m, RB2); RB3 = o:2; RB4 = o(2); }
+:"divq mr, r2" is op0=0xf & op1=5 & Nhi=1 & Bv=3 & RB2 & RB3 & RB4 { local m:4 = (zext(RB4) << 16) | zext(RB3); local o:4 = divq_op(m, RB2); RB3 = o:2; RB4 = o(2); }
+:"r2" "=" "exp" "r4" is op0=0xf & op1=5 & Nhi=1 & Bv=4 & RB2 & RB4 { RB2 = exp_op(RB4); }
 :"nop" is op0=0xf & op1=5 & Nhi=1 & Bv=5 { }
 
 # ------------------------------------------------------------------------------------------
 # u'nSP 2.0 extended group (prefix 0xff80)
 # Registers of the extended group: XRd = {bit 8, A}, XRs = {bit 3, B}, XRa = r8+A, XRp = r8+B
 XRdV: "sp" is x8=0 & Av=0 { export sp; }
-XRdV: "r1" is x8=0 & Av=1 { export r1; }
-XRdV: "r2" is x8=0 & Av=2 { export r2; }
-XRdV: "r3" is x8=0 & Av=3 { export r3; }
-XRdV: "r4" is x8=0 & Av=4 { export r4; }
+XRdV: "r1" is x8=0 & Av=1 & secb=0 { export r1; }
+XRdV: "r1" is x8=0 & Av=1 & secb=1 { export sr1; }
+XRdV: "r2" is x8=0 & Av=2 & secb=0 { export r2; }
+XRdV: "r2" is x8=0 & Av=2 & secb=1 { export sr2; }
+XRdV: "r3" is x8=0 & Av=3 & secb=0 { export r3; }
+XRdV: "r3" is x8=0 & Av=3 & secb=1 { export sr3; }
+XRdV: "r4" is x8=0 & Av=4 & secb=0 { export r4; }
+XRdV: "r4" is x8=0 & Av=4 & secb=1 { export sr4; }
 XRdV: "bp" is x8=0 & Av=5 { export bp; }
 XRdV: "sr" is x8=0 & Av=6 { local t:2; srnow(t); export t; }
 XRdV: "pc" is x8=0 & Av=7 { local t:2; pcnext(t); export t; }
@@ -579,10 +648,14 @@ XRdV: "r13" is x8=1 & Av=5 { export r13; }
 XRdV: "r14" is x8=1 & Av=6 { export r14; }
 XRdV: "r15" is x8=1 & Av=7 { export r15; }
 XRsV: "sp" is bit3=0 & Bv=0 { export sp; }
-XRsV: "r1" is bit3=0 & Bv=1 { export r1; }
-XRsV: "r2" is bit3=0 & Bv=2 { export r2; }
-XRsV: "r3" is bit3=0 & Bv=3 { export r3; }
-XRsV: "r4" is bit3=0 & Bv=4 { export r4; }
+XRsV: "r1" is bit3=0 & Bv=1 & secb=0 { export r1; }
+XRsV: "r1" is bit3=0 & Bv=1 & secb=1 { export sr1; }
+XRsV: "r2" is bit3=0 & Bv=2 & secb=0 { export r2; }
+XRsV: "r2" is bit3=0 & Bv=2 & secb=1 { export sr2; }
+XRsV: "r3" is bit3=0 & Bv=3 & secb=0 { export r3; }
+XRsV: "r3" is bit3=0 & Bv=3 & secb=1 { export sr3; }
+XRsV: "r4" is bit3=0 & Bv=4 & secb=0 { export r4; }
+XRsV: "r4" is bit3=0 & Bv=4 & secb=1 { export sr4; }
 XRsV: "bp" is bit3=0 & Bv=5 { export bp; }
 XRsV: "sr" is bit3=0 & Bv=6 { local t:2; srnow(t); export t; }
 XRsV: "pc" is bit3=0 & Bv=7 { local t:2; pcnext(t); export t; }
@@ -595,10 +668,14 @@ XRsV: "r13" is bit3=1 & Bv=5 { export r13; }
 XRsV: "r14" is bit3=1 & Bv=6 { export r14; }
 XRsV: "r15" is bit3=1 & Bv=7 { export r15; }
 XPtr: "sp" is bit3=0 & Bv=0 { export sp; }
-XPtr: "r1" is bit3=0 & Bv=1 { export r1; }
-XPtr: "r2" is bit3=0 & Bv=2 { export r2; }
-XPtr: "r3" is bit3=0 & Bv=3 { export r3; }
-XPtr: "r4" is bit3=0 & Bv=4 { export r4; }
+XPtr: "r1" is bit3=0 & Bv=1 & secb=0 { export r1; }
+XPtr: "r1" is bit3=0 & Bv=1 & secb=1 { export sr1; }
+XPtr: "r2" is bit3=0 & Bv=2 & secb=0 { export r2; }
+XPtr: "r2" is bit3=0 & Bv=2 & secb=1 { export sr2; }
+XPtr: "r3" is bit3=0 & Bv=3 & secb=0 { export r3; }
+XPtr: "r3" is bit3=0 & Bv=3 & secb=1 { export sr3; }
+XPtr: "r4" is bit3=0 & Bv=4 & secb=0 { export r4; }
+XPtr: "r4" is bit3=0 & Bv=4 & secb=1 { export sr4; }
 XPtr: "bp" is bit3=0 & Bv=5 { export bp; }
 XPtr: "sr" is bit3=0 & Bv=6 { export sr; }
 XPtr: "pc" is bit3=0 & Bv=7 { local t:2; pcnext(t); export t; }
@@ -611,10 +688,14 @@ XPtr: "r13" is bit3=1 & Bv=5 { export r13; }
 XPtr: "r14" is bit3=1 & Bv=6 { export r14; }
 XPtr: "r15" is bit3=1 & Bv=7 { export r15; }
 XRdW: "sp" is x8=0 & Av=0 { export sp; }
-XRdW: "r1" is x8=0 & Av=1 { export r1; }
-XRdW: "r2" is x8=0 & Av=2 { export r2; }
-XRdW: "r3" is x8=0 & Av=3 { export r3; }
-XRdW: "r4" is x8=0 & Av=4 { export r4; }
+XRdW: "r1" is x8=0 & Av=1 & secb=0 { export r1; }
+XRdW: "r1" is x8=0 & Av=1 & secb=1 { export sr1; }
+XRdW: "r2" is x8=0 & Av=2 & secb=0 { export r2; }
+XRdW: "r2" is x8=0 & Av=2 & secb=1 { export sr2; }
+XRdW: "r3" is x8=0 & Av=3 & secb=0 { export r3; }
+XRdW: "r3" is x8=0 & Av=3 & secb=1 { export sr3; }
+XRdW: "r4" is x8=0 & Av=4 & secb=0 { export r4; }
+XRdW: "r4" is x8=0 & Av=4 & secb=1 { export sr4; }
 XRdW: "bp" is x8=0 & Av=5 { export bp; }
 XRdW: "sr" is x8=0 & Av=6 { export sr; }
 XRdW: "r8" is x8=1 & Av=0 { export r8; }
@@ -626,10 +707,14 @@ XRdW: "r13" is x8=1 & Av=5 { export r13; }
 XRdW: "r14" is x8=1 & Av=6 { export r14; }
 XRdW: "r15" is x8=1 & Av=7 { export r15; }
 XRsW: "sp" is bit3=0 & Bv=0 { export sp; }
-XRsW: "r1" is bit3=0 & Bv=1 { export r1; }
-XRsW: "r2" is bit3=0 & Bv=2 { export r2; }
-XRsW: "r3" is bit3=0 & Bv=3 { export r3; }
-XRsW: "r4" is bit3=0 & Bv=4 { export r4; }
+XRsW: "r1" is bit3=0 & Bv=1 & secb=0 { export r1; }
+XRsW: "r1" is bit3=0 & Bv=1 & secb=1 { export sr1; }
+XRsW: "r2" is bit3=0 & Bv=2 & secb=0 { export r2; }
+XRsW: "r2" is bit3=0 & Bv=2 & secb=1 { export sr2; }
+XRsW: "r3" is bit3=0 & Bv=3 & secb=0 { export r3; }
+XRsW: "r3" is bit3=0 & Bv=3 & secb=1 { export sr3; }
+XRsW: "r4" is bit3=0 & Bv=4 & secb=0 { export r4; }
+XRsW: "r4" is bit3=0 & Bv=4 & secb=1 { export sr4; }
 XRsW: "bp" is bit3=0 & Bv=5 { export bp; }
 XRsW: "sr" is bit3=0 & Bv=6 { export sr; }
 XRsW: "r8" is bit3=1 & Bv=0 { export r8; }

@@ -113,6 +113,8 @@ public class EmuTest extends GhidraScript {
 		Address end = wa(c.until >= 0 ? c.until : c.start + c.code.length / 2);
 		clearListing(new AddressSet(start, start.add(c.code.length + 16)));
 		setBytes(start, c.code);
+		// disassemble first so that context changes (SECBANK) propagate through the code
+		disassemble(start);
 		EmulatorHelper emu = new EmulatorHelper(currentProgram);
 		try {
 			for (Map.Entry<String, Long> e : c.set.entrySet()) {

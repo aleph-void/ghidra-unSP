@@ -61,11 +61,15 @@ public class EveryEntry extends GhidraScript {
 				for (int i = 0; i < line.length() / 2; i++) {
 					b[i] = (byte) Integer.parseInt(line.substring(2 * i, 2 * i + 2), 16);
 				}
+				for (int bank = 0; bank <= 1; bank++) {
 				ProcessorContextImpl ctx = new ProcessorContextImpl(lang);
 				Register cr = lang.getContextBaseRegister();
 				if (cr != null && cr != Register.NO_CONTEXT) {
 					ctx.setRegisterValue(
 						currentProgram.getProgramContext().getDefaultDisassemblyContext());
+				}
+				if (lang.getRegister("secb") != null) {
+					ctx.setValue(lang.getRegister("secb"), java.math.BigInteger.valueOf(bank));
 				}
 				try {
 					MemBuffer buf = new ByteMemBufferImpl(a, b, true);
@@ -76,6 +80,7 @@ public class EveryEntry extends GhidraScript {
 				}
 				catch (Exception e) {
 					// undecodable
+				}
 				}
 			}
 		}
